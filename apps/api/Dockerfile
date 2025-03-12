@@ -16,10 +16,10 @@ ENV LD_LIBRARY_PATH=/opt/instantclient
 WORKDIR /usr/src/app
 
 # Copy only the package files to optimize caching
-COPY package.json yarn.lock ./
+COPY package.json ./
 
 # Install dependencies
-RUN yarn install --frozen-lockfile
+RUN yarn install
 
 # Copy source code
 COPY . .
@@ -45,8 +45,8 @@ ENV NODE_ENV=production
 
 WORKDIR /usr/src/app
 
-COPY package.json yarn.lock ./
-RUN yarn install --frozen-lockfile --production=true
+COPY package.json ./
+RUN yarn install --production=true
 
 COPY --from=development /usr/src/app/dist ./dist
 COPY --from=development /usr/src/app/views ./views
