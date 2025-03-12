@@ -16,7 +16,8 @@
     "strict": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "strictPropertyInitialization": false
+    "strictPropertyInitialization": false,
+    "useDefineForClassFields": false
   },
   "exclude": ["node_modules"]
 }

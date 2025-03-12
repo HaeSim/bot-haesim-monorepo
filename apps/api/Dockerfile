@@ -24,8 +24,8 @@ RUN yarn install
 # Copy source code
 COPY . .
 
-# Build application
-RUN yarn build
+# Build application - with additional TypeScript options
+RUN NODE_OPTIONS="--max-old-space-size=4096" yarn build
 
 # Production stage
 FROM node:23.7.0-alpine AS production
