@@ -6,6 +6,10 @@ on:
 permissions:
   contents: read
   packages: write
+
+env:
+  REGISTRY: ghcr.io
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -58,7 +62,7 @@ jobs:
             echo "WEB_CHANGED=true" >> $GITHUB_ENV
             echo "Web 변경 감지됨"
           fi
-          
+
           # apps/ollama 디렉토리의 파일이 변경되었는지 확인
           if echo "$CHANGED_FILES" | grep -q "^apps/ollama/"; then
             echo "OLLAMA_CHANGED=true" >> $GITHUB_ENV
@@ -85,12 +89,19 @@ jobs:
           echo "OWNER_LOWERCASE=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
           echo "REPO_LOWERCASE=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]' | cut -d'/' -f2)" >> $GITHUB_ENV
 
+      # GitHub Container Registry 로그인
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 로그인 상태 확인
+      - name: Check Docker login status
+        run: |
+          echo "Docker 로그인 상태 확인..."
+          docker info
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -117,6 +128,13 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache-api
           cache-to: type=local,dest=/tmp/.buildx-cache-api-new,mode=max
 
+      # API 이미지 빌드 결과 확인
+      - name: Check API image build result
+        if: env.API_CHANGED == 'true'
+        run: |
+          echo "API 이미지 빌드 결과 확인..."
+          docker image ls | grep "${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-api" || echo "API 이미지가 빌드되지 않았습니다."
+
       # 웹 이미지 빌드 및 푸시 (변경 감지 시에만)
       - name: Build and push Web Docker image
         if: env.WEB_CHANGED == 'true'
@@ -130,6 +148,13 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache-web
           cache-to: type=local,dest=/tmp/.buildx-cache-web-new,mode=max
 
+      # Web 이미지 빌드 결과 확인
+      - name: Check Web image build result
+        if: env.WEB_CHANGED == 'true'
+        run: |
+          echo "Web 이미지 빌드 결과 확인..."
+          docker image ls | grep "${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-web" || echo "Web 이미지가 빌드되지 않았습니다."
+
       # Ollama 이미지 빌드 및 푸시 (변경 감지 시에만)
       - name: Build and push Ollama Docker image
         if: env.OLLAMA_CHANGED == 'true'
@@ -141,6 +166,13 @@ jobs:
           platforms: linux/arm64 # OCI VM.Standard.A1.Flex는 ARM64 아키텍처 사용
           cache-from: type=local,src=/tmp/.buildx-cache-ollama
           cache-to: type=local,dest=/tmp/.buildx-cache-ollama-new,mode=max
+
+      # Ollama 이미지 빌드 결과 확인
+      - name: Check Ollama image build result
+        if: env.OLLAMA_CHANGED == 'true'
+        run: |
+          echo "Ollama 이미지 빌드 결과 확인..."
+          docker image ls | grep "${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-ollama" || echo "Ollama 이미지가 빌드되지 않았습니다."
 
       # 캐시 업데이트
       - name: Move cache
@@ -155,23 +187,45 @@ jobs:
       - name: Make packages public
         run: |
           echo "GitHub 패키지를 공개로 설정합니다..."
-          curl -X PATCH \
-            -H "Accept: application/vnd.github.v3+json" \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/user/packages/container/${{ env.REPO_LOWERCASE }}-api/visibility \
-            -d '{"visibility":"public"}'
 
-          curl -X PATCH \
-            -H "Accept: application/vnd.github.v3+json" \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/user/packages/container/${{ env.REPO_LOWERCASE }}-web/visibility \
-            -d '{"visibility":"public"}'
+          # 패키지 가시성 설정 함수
+          set_package_visibility() {
+            local package_name=$1
+            echo "패키지 $package_name 가시성 설정 시도..."
             
-          curl -X PATCH \
-            -H "Accept: application/vnd.github.v3+json" \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/user/packages/container/${{ env.REPO_LOWERCASE }}-ollama/visibility \
-            -d '{"visibility":"public"}'
+            # 패키지 존재 여부 확인
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/orgs/${{ env.OWNER_LOWERCASE }}/packages/container/$package_name")
+            
+            if [ "$STATUS" = "200" ]; then
+              # 조직 패키지인 경우
+              curl -X PATCH \
+                -H "Accept: application/vnd.github.v3+json" \
+                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                "https://api.github.com/orgs/${{ env.OWNER_LOWERCASE }}/packages/container/$package_name/visibility" \
+                -d '{"visibility":"public"}'
+              echo "조직 패키지 $package_name 가시성 설정 완료"
+            else
+              # 사용자 패키지인 경우
+              curl -X PATCH \
+                -H "Accept: application/vnd.github.v3+json" \
+                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                "https://api.github.com/user/packages/container/$package_name/visibility" \
+                -d '{"visibility":"public"}'
+              echo "사용자 패키지 $package_name 가시성 설정 완료"
+            fi
+          }
+
+          # API 패키지 가시성 설정
+          set_package_visibility "${{ env.REPO_LOWERCASE }}-api"
+
+          # Web 패키지 가시성 설정
+          set_package_visibility "${{ env.REPO_LOWERCASE }}-web"
+
+          # Ollama 패키지 가시성 설정
+          set_package_visibility "${{ env.REPO_LOWERCASE }}-ollama"
 
       # SSH를 통한 OCI 인스턴스 배포
       - name: Deploy to OCI instance
@@ -188,27 +242,56 @@ jobs:
             OWNER_LOWERCASE="${{ env.OWNER_LOWERCASE }}"
             REPO_LOWERCASE="${{ env.REPO_LOWERCASE }}"
 
+            # 디버깅 정보 출력
+            echo "디버깅 정보:"
+            echo "OWNER_LOWERCASE: $OWNER_LOWERCASE"
+            echo "REPO_LOWERCASE: $REPO_LOWERCASE"
+            echo "API_CHANGED: ${{ env.API_CHANGED }}"
+            echo "WEB_CHANGED: ${{ env.WEB_CHANGED }}"
+            echo "OLLAMA_CHANGED: ${{ env.OLLAMA_CHANGED }}"
+
             # GitHub Container Registry 로그인 (PAT 토큰 사용)
             if [ ! -z "${{ secrets.GH_PAT }}" ]; then
               echo "GitHub Container Registry에 로그인 시도..."
               echo "${{ secrets.GH_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            else
+              echo "경고: GH_PAT 시크릿이 설정되지 않았습니다."
             fi
+
+            # 사용 가능한 이미지 확인
+            echo "사용 가능한 이미지 목록 확인:"
+            docker image ls | grep "$OWNER_LOWERCASE/$REPO_LOWERCASE"
 
             # 변경된 이미지만 가져오기
             if [ "${{ env.API_CHANGED }}" = "true" ]; then
               echo "Pulling new API image..."
-              docker pull ghcr.io/$OWNER_LOWERCASE/$REPO_LOWERCASE-api:latest
+              docker pull ghcr.io/$OWNER_LOWERCASE/$REPO_LOWERCASE-api:latest || echo "API 이미지 가져오기 실패"
+              # 이미지 존재 여부 확인
+              docker image inspect ghcr.io/$OWNER_LOWERCASE/$REPO_LOWERCASE-api:latest >/dev/null 2>&1 || echo "API 이미지가 존재하지 않습니다"
             fi
 
             if [ "${{ env.WEB_CHANGED }}" = "true" ]; then
               echo "Pulling new Web image..."
-              docker pull ghcr.io/$OWNER_LOWERCASE/$REPO_LOWERCASE-web:latest
+              docker pull ghcr.io/$OWNER_LOWERCASE/$REPO_LOWERCASE-web:latest || echo "Web 이미지 가져오기 실패"
+              # 이미지 존재 여부 확인
+              docker image inspect ghcr.io/$OWNER_LOWERCASE/$REPO_LOWERCASE-web:latest >/dev/null 2>&1 || echo "Web 이미지가 존재하지 않습니다"
             fi
-            
+
             if [ "${{ env.OLLAMA_CHANGED }}" = "true" ]; then
               echo "Pulling new Ollama image..."
-              docker pull ghcr.io/$OWNER_LOWERCASE/$REPO_LOWERCASE-ollama:latest
+              docker pull ghcr.io/$OWNER_LOWERCASE/$REPO_LOWERCASE-ollama:latest || echo "Ollama 이미지 가져오기 실패"
+              # 이미지 존재 여부 확인
+              docker image inspect ghcr.io/$OWNER_LOWERCASE/$REPO_LOWERCASE-ollama:latest >/dev/null 2>&1 || echo "Ollama 이미지가 존재하지 않습니다"
             fi
+
+            # GitHub 패키지 API 확인
+            echo "GitHub 패키지 API 확인:"
+            curl -s -H "Authorization: token ${{ secrets.GH_PAT }}" \
+              "https://api.github.com/user/packages/container/$REPO_LOWERCASE-api" || echo "API 패키지 정보 가져오기 실패"
+            curl -s -H "Authorization: token ${{ secrets.GH_PAT }}" \
+              "https://api.github.com/user/packages/container/$REPO_LOWERCASE-web" || echo "Web 패키지 정보 가져오기 실패"
+            curl -s -H "Authorization: token ${{ secrets.GH_PAT }}" \
+              "https://api.github.com/user/packages/container/$REPO_LOWERCASE-ollama" || echo "Ollama 패키지 정보 가져오기 실패"
 
             # docker-compose.yml 생성
             cat > ~/bot-haesim-deploy/docker-compose.yml << 'EOF'
@@ -269,10 +352,27 @@ jobs:
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
             EOF
 
-            # 컨테이너 실행
+            # 컨테이너 실행 (Ollama만 변경된 경우 Ollama만 재시작)
             cd ~/bot-haesim-deploy
-            docker-compose down || true
-            docker-compose up -d
+
+            if [ "${{ env.API_CHANGED }}" = "true" ] || [ "${{ env.WEB_CHANGED }}" = "true" ]; then
+              echo "API 또는 Web이 변경되어 모든 서비스를 재시작합니다."
+              docker-compose down || true
+              docker-compose up -d
+            elif [ "${{ env.OLLAMA_CHANGED }}" = "true" ]; then
+              echo "Ollama만 변경되어 Ollama 서비스만 재시작합니다."
+              docker-compose stop ollama || true
+              docker-compose rm -f ollama || true
+              docker-compose up -d ollama
+            else
+              echo "변경된 서비스가 없습니다. 모든 서비스를 재시작합니다."
+              docker-compose down || true
+              docker-compose up -d
+            fi
+
+            # 컨테이너 상태 확인
+            echo "컨테이너 상태:"
+            docker-compose ps
 
             # 더 적극적인 이미지 정리 (12시간 이내 사용되지 않은 이미지)
             docker image prune -a -f --filter "until=12h"
