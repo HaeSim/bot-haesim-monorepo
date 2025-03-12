@@ -6,7 +6,9 @@
     "paths": {
       "*": ["node_modules/*"]
     },
-    "useDefineForClassFields": false
+    "useDefineForClassFields": false,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
