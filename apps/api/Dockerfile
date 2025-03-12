@@ -15,18 +15,21 @@ ENV LD_LIBRARY_PATH=/opt/instantclient
 
 WORKDIR /usr/src/app
 
-# Copy only the package files to optimize caching
-COPY package.json ./
+# Copy workspace files for monorepo
+COPY package.json yarn.lock ./
+COPY packages/ ./packages/
+COPY apps/api/package.json ./apps/api/
 
-# Install dependencies
-RUN yarn install
+# Add yarn network timeout and retry options to fix installation issues 
+RUN yarn config set network-timeout 300000 && \
+    yarn install --network-timeout 300000 --frozen-lockfile --network-concurrency 1
 
 # Copy source code
 COPY . .
 
 # Build application - with additional TypeScript options
 ENV PATH="./node_modules/.bin:$PATH"
-RUN NODE_OPTIONS="--max-old-space-size=4096" yarn build
+RUN NODE_OPTIONS="--max-old-space-size=4096" yarn workspace api build
 
 # Production stage
 FROM node:23.7.0-alpine AS production
@@ -46,8 +49,11 @@ ENV NODE_ENV=production
 
 WORKDIR /usr/src/app
 
-COPY package.json ./
-RUN yarn install --production=true
+COPY package.json yarn.lock ./
+COPY packages/ ./packages/
+COPY apps/api/package.json ./apps/api/
+RUN yarn config set network-timeout 300000 && \
+    yarn install --production=true --network-timeout 300000 --frozen-lockfile --network-concurrency 1
 
 COPY --from=development /usr/src/app/dist ./dist
 COPY --from=development /usr/src/app/views ./views

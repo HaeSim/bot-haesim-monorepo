@@ -1,12 +1,13 @@
 services:
   api:
     build:
-      context: ./apps/api
+      context: .
+      dockerfile: ./apps/api/Dockerfile
       target: development
     volumes:
-      - ./apps/api:/usr/src/app
+      - ./:/usr/src/app
       - /usr/src/app/node_modules
-    command: yarn dev
+    command: yarn workspace api dev
     ports:
       - '${API_PORT}:${API_PORT}'
     networks:
@@ -17,12 +18,13 @@ services:
 
   web:
     build:
-      context: ./apps/web
+      context: .
+      dockerfile: ./apps/web/Dockerfile
       target: development
     volumes:
-      - ./apps/web:/usr/src/app
+      - ./:/usr/src/app
       - /usr/src/app/node_modules
-    command: yarn dev
+    command: yarn workspace web dev
     ports:
       - '${WEB_PORT}:3000' # NextJS runs on 3000 internally
     networks:

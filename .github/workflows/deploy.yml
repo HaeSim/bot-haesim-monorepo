@@ -127,13 +127,16 @@ jobs:
         if: env.API_CHANGED == 'true'
         uses: docker/build-push-action@v4
         with:
-          context: ./apps/api
+          context: .
+          file: ./apps/api/Dockerfile
           push: true
           tags: ghcr.io/${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-api:latest
           target: production
           platforms: linux/arm64 # OCI VM.Standard.A1.Flex는 ARM64 아키텍처 사용
           cache-from: type=local,src=/tmp/.buildx-cache-api
           cache-to: type=local,dest=/tmp/.buildx-cache-api-new,mode=max
+          build-args: |
+            NODE_ENV=production
         continue-on-error: true
 
       # API 이미지 빌드 결과 확인
@@ -156,13 +159,16 @@ jobs:
         if: env.WEB_CHANGED == 'true'
         uses: docker/build-push-action@v4
         with:
-          context: ./apps/web
+          context: .
+          file: ./apps/web/Dockerfile
           push: true
           tags: ghcr.io/${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-web:latest
           target: production
           platforms: linux/arm64 # OCI VM.Standard.A1.Flex는 ARM64 아키텍처 사용
           cache-from: type=local,src=/tmp/.buildx-cache-web
           cache-to: type=local,dest=/tmp/.buildx-cache-web-new,mode=max
+          build-args: |
+            NODE_ENV=production
         continue-on-error: true
 
       # Web 이미지 빌드 결과 확인
@@ -191,6 +197,7 @@ jobs:
           platforms: linux/arm64 # OCI VM.Standard.A1.Flex는 ARM64 아키텍처 사용
           cache-from: type=local,src=/tmp/.buildx-cache-ollama
           cache-to: type=local,dest=/tmp/.buildx-cache-ollama-new,mode=max
+          no-cache: false
         continue-on-error: true
 
       # Ollama 이미지 빌드 결과 확인
