@@ -25,6 +25,7 @@ RUN yarn install
 COPY . .
 
 # Build application - with additional TypeScript options
+ENV PATH="./node_modules/.bin:$PATH"
 RUN NODE_OPTIONS="--max-old-space-size=4096" yarn build
 
 # Production stage
