@@ -18,7 +18,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: 23
+          node-version: 23 # Node.js 18 LTS 버전 사용
           cache: 'yarn'
 
       # Turborepo 캐시 복원
@@ -34,46 +34,48 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      # Turborepo를 사용한 빌드 - 변경된 앱만 빌드
-      - name: Build with Turborepo
-        run: yarn turbo build --filter="[HEAD^1]"
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ github.repository_owner }}
+      # 변경된 앱 감지 - git diff 사용
+      - name: Detect changed apps
+        id: changes
+        run: |
+          # Git diff를 사용하여 변경된 파일 확인
+          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD || git diff --name-only HEAD~1 HEAD)
+          echo "Changed files: $CHANGED_FILES"
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+          # 기본적으로 API와 Web 모두 변경되지 않은 것으로 설정
+          echo "API_CHANGED=false" >> $GITHUB_ENV
+          echo "WEB_CHANGED=false" >> $GITHUB_ENV
 
-      # 저장소 이름을 소문자로 변환 (ghcr.io 요구사항)
+          # apps/api 디렉토리의 파일이 변경되었는지 확인
+          if echo "$CHANGED_FILES" | grep -q "^apps/api/"; then
+            echo "API_CHANGED=true" >> $GITHUB_ENV
+            echo "API 변경 감지됨"
+          fi
+
+          # apps/web 디렉토리의 파일이 변경되었는지 확인
+          if echo "$CHANGED_FILES" | grep -q "^apps/web/"; then
+            echo "WEB_CHANGED=true" >> $GITHUB_ENV
+            echo "Web 변경 감지됨"
+          fi
+
+          # packages 디렉토리의 파일이 변경되었는지 확인 (공통 패키지)
+          if echo "$CHANGED_FILES" | grep -q "^packages/"; then
+            echo "API_CHANGED=true" >> $GITHUB_ENV
+            echo "WEB_CHANGED=true" >> $GITHUB_ENV
+            echo "공통 패키지 변경 감지됨"
+          fi
+
+          # 변경사항이 없으면 모든 앱을 다시 빌드
+          if [ "$API_CHANGED" = "false" ] && [ "$WEB_CHANGED" = "false" ]; then
+            echo "변경사항 없음, 모든 앱 빌드 예정"
+            echo "API_CHANGED=true" >> $GITHUB_ENV
+            echo "WEB_CHANGED=true" >> $GITHUB_ENV
+          fi
+
       - name: Set lowercase owner name
         run: |
           echo "OWNER_LOWERCASE=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
           echo "REPO_LOWERCASE=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]' | cut -d'/' -f2)" >> $GITHUB_ENV
-
-      # 변경된 앱 감지
-      - name: Detect changed apps
-        id: changes
-        run: |
-          CHANGED_PACKAGES=$(yarn turbo run build --dry=json --filter="[HEAD^1]" | jq -r '.tasks[].command' | grep -v '^$' | awk -F'#' '{print $1}' | sort | uniq)
-          echo "Changed packages: $CHANGED_PACKAGES"
-          
-          if echo "$CHANGED_PACKAGES" | grep -q "apps/api"; then
-            echo "API_CHANGED=true" >> $GITHUB_ENV
-          else
-            echo "API_CHANGED=false" >> $GITHUB_ENV
-          fi
-          
-          if echo "$CHANGED_PACKAGES" | grep -q "apps/web"; then
-            echo "WEB_CHANGED=true" >> $GITHUB_ENV
-          else
-            echo "WEB_CHANGED=false" >> $GITHUB_ENV
-          fi
-          
-          # 변경이 없더라도 공통 패키지가 변경되었을 때 전체 리빌드
-          if echo "$CHANGED_PACKAGES" | grep -q "packages/"; then
-            echo "API_CHANGED=true" >> $GITHUB_ENV
-            echo "WEB_CHANGED=true" >> $GITHUB_ENV
-          fi
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
@@ -81,6 +83,9 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
 
       # Docker 레이어 캐싱
       - name: Cache Docker layers
@@ -103,8 +108,6 @@ jobs:
           platforms: linux/arm64 # OCI VM.Standard.A1.Flex는 ARM64 아키텍처 사용
           cache-from: type=local,src=/tmp/.buildx-cache-api
           cache-to: type=local,dest=/tmp/.buildx-cache-api-new,mode=max
-          build-args: |
-            TURBO_CACHE_KEY=${{ github.sha }}
 
       # 웹 이미지 빌드 및 푸시 (변경 감지 시에만)
       - name: Build and push Web Docker image
@@ -118,15 +121,14 @@ jobs:
           platforms: linux/arm64 # OCI VM.Standard.A1.Flex는 ARM64 아키텍처 사용
           cache-from: type=local,src=/tmp/.buildx-cache-web
           cache-to: type=local,dest=/tmp/.buildx-cache-web-new,mode=max
-          build-args: |
-            TURBO_CACHE_KEY=${{ github.sha }}
 
       # 캐시 업데이트
       - name: Move cache
         run: |
           rm -rf /tmp/.buildx-cache-api /tmp/.buildx-cache-web
-          mv /tmp/.buildx-cache-api-new /tmp/.buildx-cache-api || true
-          mv /tmp/.buildx-cache-web-new /tmp/.buildx-cache-web || true
+          mkdir -p /tmp/.buildx-cache-api /tmp/.buildx-cache-web
+          [ -d "/tmp/.buildx-cache-api-new" ] && cp -R /tmp/.buildx-cache-api-new/* /tmp/.buildx-cache-api/ || true
+          [ -d "/tmp/.buildx-cache-web-new" ] && cp -R /tmp/.buildx-cache-web-new/* /tmp/.buildx-cache-web/ || true
 
       # SSH를 통한 OCI 인스턴스 배포
       - name: Deploy to OCI instance
@@ -144,7 +146,7 @@ jobs:
               echo "Pulling new API image..."
               docker pull ghcr.io/${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-api:latest
             fi
-            
+
             if [ "${{ env.WEB_CHANGED }}" = "true" ]; then
               echo "Pulling new Web image..."
               docker pull ghcr.io/${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-web:latest
@@ -152,8 +154,6 @@ jobs:
 
             # docker-compose.yml 생성
             cat > ~/bot-haesim-deploy/docker-compose.yml << 'EOF'
-            version: '3.8'
-
             services:
               api:
                 image: ghcr.io/${OWNER_LOWERCASE}/${REPO_LOWERCASE}-api:latest

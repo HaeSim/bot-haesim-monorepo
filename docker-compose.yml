@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   api:
     build:
@@ -26,7 +24,7 @@ services:
       - /usr/src/app/node_modules
     command: yarn dev
     ports:
-      - '${WEB_PORT}:3000'  # NextJS runs on 3000 internally
+      - '${WEB_PORT}:3000' # NextJS runs on 3000 internally
     networks:
       - app-network
     environment:
