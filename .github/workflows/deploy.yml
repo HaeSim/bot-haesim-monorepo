@@ -83,7 +83,7 @@ jobs:
 
             # 배포 디렉토리 생성
             mkdir -p ~/bot-haesim-deploy
-            
+
             # docker-compose.yml 생성
             cat > ~/bot-haesim-deploy/docker-compose.yml << 'EOF'
             version: '3.8'
