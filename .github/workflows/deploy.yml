@@ -130,6 +130,22 @@ jobs:
           [ -d "/tmp/.buildx-cache-api-new" ] && cp -R /tmp/.buildx-cache-api-new/* /tmp/.buildx-cache-api/ || true
           [ -d "/tmp/.buildx-cache-web-new" ] && cp -R /tmp/.buildx-cache-web-new/* /tmp/.buildx-cache-web/ || true
 
+      # 이미지 패키지를 공개로 설정
+      - name: Make packages public
+        run: |
+          echo "GitHub 패키지를 공개로 설정합니다..."
+          curl -X PATCH \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/user/packages/container/${{ env.REPO_LOWERCASE }}-api/visibility \
+            -d '{"visibility":"public"}'
+
+          curl -X PATCH \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/user/packages/container/${{ env.REPO_LOWERCASE }}-web/visibility \
+            -d '{"visibility":"public"}'
+
       # SSH를 통한 OCI 인스턴스 배포
       - name: Deploy to OCI instance
         uses: appleboy/ssh-action@master
@@ -141,15 +157,25 @@ jobs:
             # 배포 디렉토리 생성
             mkdir -p ~/bot-haesim-deploy
 
+            # 환경 변수 설정
+            OWNER_LOWERCASE="${{ env.OWNER_LOWERCASE }}"
+            REPO_LOWERCASE="${{ env.REPO_LOWERCASE }}"
+
+            # GitHub Container Registry 로그인 (PAT 토큰 사용)
+            if [ ! -z "${{ secrets.GH_PAT }}" ]; then
+              echo "GitHub Container Registry에 로그인 시도..."
+              echo "${{ secrets.GH_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            fi
+
             # 변경된 이미지만 가져오기
             if [ "${{ env.API_CHANGED }}" = "true" ]; then
               echo "Pulling new API image..."
-              docker pull ghcr.io/${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-api:latest
+              docker pull ghcr.io/$OWNER_LOWERCASE/$REPO_LOWERCASE-api:latest
             fi
 
             if [ "${{ env.WEB_CHANGED }}" = "true" ]; then
               echo "Pulling new Web image..."
-              docker pull ghcr.io/${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-web:latest
+              docker pull ghcr.io/$OWNER_LOWERCASE/$REPO_LOWERCASE-web:latest
             fi
 
             # docker-compose.yml 생성
@@ -193,8 +219,8 @@ jobs:
 
             # 환경 변수 파일 생성
             cat > ~/bot-haesim-deploy/.env << EOF
-            OWNER_LOWERCASE=${{ env.OWNER_LOWERCASE }}
-            REPO_LOWERCASE=${{ env.REPO_LOWERCASE }}
+            OWNER_LOWERCASE=$OWNER_LOWERCASE
+            REPO_LOWERCASE=$REPO_LOWERCASE
             BOT_ACCESS_TOKEN=${{ secrets.BOT_ACCESS_TOKEN }}
             DOMAIN_NAME=${{ secrets.DOMAIN_NAME }}
             BOT_NAME=${{ secrets.BOT_NAME }}
