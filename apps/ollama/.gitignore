@@ -1,0 +1,10 @@
+# Ollama models and data
+model/
+
+# Logs
+logs
+*.log
+
+# System files
+.DS_Store
+Thumbs.db

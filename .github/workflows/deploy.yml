@@ -42,9 +42,10 @@ jobs:
           CHANGED_FILES=$(git diff --name-only HEAD^ HEAD || git diff --name-only HEAD~1 HEAD)
           echo "Changed files: $CHANGED_FILES"
 
-          # 기본적으로 API와 Web 모두 변경되지 않은 것으로 설정
+          # 기본적으로 모든 앱이 변경되지 않은 것으로 설정
           echo "API_CHANGED=false" >> $GITHUB_ENV
           echo "WEB_CHANGED=false" >> $GITHUB_ENV
+          echo "OLLAMA_CHANGED=false" >> $GITHUB_ENV
 
           # apps/api 디렉토리의 파일이 변경되었는지 확인
           if echo "$CHANGED_FILES" | grep -q "^apps/api/"; then
@@ -57,6 +58,12 @@ jobs:
             echo "WEB_CHANGED=true" >> $GITHUB_ENV
             echo "Web 변경 감지됨"
           fi
+          
+          # apps/ollama 디렉토리의 파일이 변경되었는지 확인
+          if echo "$CHANGED_FILES" | grep -q "^apps/ollama/"; then
+            echo "OLLAMA_CHANGED=true" >> $GITHUB_ENV
+            echo "Ollama 변경 감지됨"
+          fi
 
           # packages 디렉토리의 파일이 변경되었는지 확인 (공통 패키지)
           if echo "$CHANGED_FILES" | grep -q "^packages/"; then
@@ -66,10 +73,11 @@ jobs:
           fi
 
           # 변경사항이 없으면 모든 앱을 다시 빌드
-          if [ "$API_CHANGED" = "false" ] && [ "$WEB_CHANGED" = "false" ]; then
+          if [ "$API_CHANGED" = "false" ] && [ "$WEB_CHANGED" = "false" ] && [ "$OLLAMA_CHANGED" = "false" ]; then
             echo "변경사항 없음, 모든 앱 빌드 예정"
             echo "API_CHANGED=true" >> $GITHUB_ENV
             echo "WEB_CHANGED=true" >> $GITHUB_ENV
+            echo "OLLAMA_CHANGED=true" >> $GITHUB_ENV
           fi
 
       - name: Set lowercase owner name
@@ -122,13 +130,26 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache-web
           cache-to: type=local,dest=/tmp/.buildx-cache-web-new,mode=max
 
+      # Ollama 이미지 빌드 및 푸시 (변경 감지 시에만)
+      - name: Build and push Ollama Docker image
+        if: env.OLLAMA_CHANGED == 'true'
+        uses: docker/build-push-action@v4
+        with:
+          context: ./apps/ollama
+          push: true
+          tags: ghcr.io/${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-ollama:latest
+          platforms: linux/arm64 # OCI VM.Standard.A1.Flex는 ARM64 아키텍처 사용
+          cache-from: type=local,src=/tmp/.buildx-cache-ollama
+          cache-to: type=local,dest=/tmp/.buildx-cache-ollama-new,mode=max
+
       # 캐시 업데이트
       - name: Move cache
         run: |
-          rm -rf /tmp/.buildx-cache-api /tmp/.buildx-cache-web
-          mkdir -p /tmp/.buildx-cache-api /tmp/.buildx-cache-web
+          rm -rf /tmp/.buildx-cache-api /tmp/.buildx-cache-web /tmp/.buildx-cache-ollama
+          mkdir -p /tmp/.buildx-cache-api /tmp/.buildx-cache-web /tmp/.buildx-cache-ollama
           [ -d "/tmp/.buildx-cache-api-new" ] && cp -R /tmp/.buildx-cache-api-new/* /tmp/.buildx-cache-api/ || true
           [ -d "/tmp/.buildx-cache-web-new" ] && cp -R /tmp/.buildx-cache-web-new/* /tmp/.buildx-cache-web/ || true
+          [ -d "/tmp/.buildx-cache-ollama-new" ] && cp -R /tmp/.buildx-cache-ollama-new/* /tmp/.buildx-cache-ollama/ || true
 
       # 이미지 패키지를 공개로 설정
       - name: Make packages public
@@ -144,6 +165,12 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             https://api.github.com/user/packages/container/${{ env.REPO_LOWERCASE }}-web/visibility \
+            -d '{"visibility":"public"}'
+            
+          curl -X PATCH \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/user/packages/container/${{ env.REPO_LOWERCASE }}-ollama/visibility \
             -d '{"visibility":"public"}'
 
       # SSH를 통한 OCI 인스턴스 배포
@@ -176,6 +203,11 @@ jobs:
             if [ "${{ env.WEB_CHANGED }}" = "true" ]; then
               echo "Pulling new Web image..."
               docker pull ghcr.io/$OWNER_LOWERCASE/$REPO_LOWERCASE-web:latest
+            fi
+            
+            if [ "${{ env.OLLAMA_CHANGED }}" = "true" ]; then
+              echo "Pulling new Ollama image..."
+              docker pull ghcr.io/$OWNER_LOWERCASE/$REPO_LOWERCASE-ollama:latest
             fi
 
             # docker-compose.yml 생성
@@ -211,6 +243,14 @@ jobs:
                   - app-network
                 depends_on:
                   - api
+                  
+              ollama:
+                image: ghcr.io/${OWNER_LOWERCASE}/${REPO_LOWERCASE}-ollama:latest
+                ports:
+                  - "11434:11434"
+                restart: unless-stopped
+                networks:
+                  - app-network
 
             networks:
               app-network:

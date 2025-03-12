@@ -31,6 +31,16 @@ services:
       - NODE_ENV=development
       - NEXT_PUBLIC_API_URL=http://api:${API_PORT}
 
+  ollama:
+    build:
+      context: ./apps/ollama
+      dockerfile: Dockerfile
+    ports:
+      - "11434:11434"
+    restart: unless-stopped
+    networks:
+      - app-network
+
 networks:
   app-network:
     driver: bridge
