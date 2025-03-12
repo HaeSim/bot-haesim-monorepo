@@ -10,9 +10,6 @@ RUN apt update && apt install -y \
 # Ollama 설치 (ARM64 지원)
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
-# 모델 다운로드 (Kanana Nano 2.1B)
-RUN ollama pull huihui_ai/kanana-nano-abliterated
-
 # 실행 포트
 EXPOSE 11434
 
