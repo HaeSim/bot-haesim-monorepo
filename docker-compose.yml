@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: ./apps/api
+      target: development
+    volumes:
+      - ./apps/api:/usr/src/app
+      - /usr/src/app/node_modules
+    command: yarn dev
+    ports:
+      - '${API_PORT}:${API_PORT}'
+    networks:
+      - app-network
+    environment:
+      - NODE_ENV=development
+      - PORT=${API_PORT}
+
+  web:
+    build:
+      context: ./apps/web
+      target: development
+    volumes:
+      - ./apps/web:/usr/src/app
+      - /usr/src/app/node_modules
+    command: yarn dev
+    ports:
+      - '${WEB_PORT}:3000'  # NextJS runs on 3000 internally
+    networks:
+      - app-network
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://api:${API_PORT}
+
+networks:
+  app-network:
+    driver: bridge

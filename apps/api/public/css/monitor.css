@@ -1,0 +1,229 @@
+/* 전체 스타일 */
+body {
+  font-family: 'Noto Sans KR', sans-serif;
+  background-color: #f8f9fa;
+  color: #333;
+  transition: all 0.3s ease;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 600;
+}
+
+/* 카드 스타일 */
+.card {
+  margin-bottom: 20px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.card:hover {
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.card-header {
+  font-weight: bold;
+  border-top-left-radius: 0.5rem;
+  border-top-right-radius: 0.5rem;
+}
+
+/* 대시보드 컨테이너 */
+.container-fluid {
+  padding: 1.5rem;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+/* 상태 카드 */
+.bg-light {
+  background-color: #f8f9fa !important;
+  border: 1px solid #eaeaea;
+  transition: all 0.3s ease;
+}
+
+.bg-light:hover {
+  background-color: #ffffff !important;
+  border-color: #d1d1d1;
+}
+
+/* 차트 컨테이너 */
+canvas {
+  max-height: 300px;
+}
+
+/* 테이블 스타일 */
+.table {
+  font-size: 0.95rem;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.table th {
+  font-weight: 600;
+  background-color: #f2f2f2;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.table td {
+  vertical-align: middle;
+}
+
+.table-responsive {
+  overflow-x: auto;
+}
+
+/* 테이블 행 호버 효과 */
+.table tbody tr {
+  transition: all 0.2s ease;
+}
+
+.table tbody tr:hover {
+  background-color: rgba(0, 123, 255, 0.05) !important;
+  cursor: pointer;
+}
+
+/* 룸 행 스타일 */
+.room-row {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.room-row:hover {
+  background-color: #e9ecef;
+}
+
+/* 버튼 스타일 */
+.btn {
+  transition: all 0.3s ease;
+  border-radius: 0.25rem;
+  font-weight: 500;
+}
+
+.btn-primary {
+  background-color: #0d6efd;
+  border-color: #0d6efd;
+}
+
+.btn-primary:hover {
+  background-color: #0b5ed7;
+  border-color: #0a58ca;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 배지 스타일 */
+.badge {
+  font-weight: 500;
+  padding: 0.35em 0.65em;
+  transition: all 0.3s ease;
+}
+
+/* 로딩 애니메이션 */
+.loading {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
+  margin-right: 0.5rem;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 반응형 조정 */
+@media (max-width: 1200px) {
+  .container-fluid {
+    padding: 1.25rem;
+  }
+}
+
+@media (max-width: 992px) {
+  .card-body {
+    padding: 1.25rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .container-fluid {
+    padding: 1rem 0.5rem;
+  }
+
+  h1 {
+    font-size: 1.8rem;
+  }
+
+  .card-body {
+    padding: 1rem;
+  }
+
+  .table {
+    font-size: 0.85rem;
+  }
+
+  .row > div[class^='col-'] {
+    margin-bottom: 1rem;
+  }
+}
+
+@media (max-width: 576px) {
+  h1 {
+    font-size: 1.5rem;
+  }
+
+  .card-header h5 {
+    font-size: 1rem;
+  }
+
+  .table {
+    font-size: 0.75rem;
+  }
+}
+
+/* 다크 모드 지원 */
+@media (prefers-color-scheme: dark) {
+  body.dark-mode {
+    background-color: #343a40;
+    color: #f8f9fa;
+  }
+
+  body.dark-mode .card {
+    background-color: #495057;
+    border-color: #333;
+  }
+
+  body.dark-mode .bg-light {
+    background-color: #495057 !important;
+    border-color: #333;
+  }
+
+  body.dark-mode .table {
+    color: #f8f9fa;
+  }
+
+  body.dark-mode .table th {
+    background-color: #2a2a2a;
+  }
+
+  body.dark-mode .table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+}
+
+/* 토스트 메시지 스타일 */
+.toast-container {
+  z-index: 1100;
+}

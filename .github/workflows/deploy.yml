@@ -1,0 +1,146 @@
+name: Deploy to OCI
+on:
+  push:
+    branches: [main]
+# 필요한 권한 설정
+permissions:
+  contents: read
+  packages: write
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      # 저장소 이름을 소문자로 변환 (ghcr.io 요구사항)
+      - name: Set lowercase owner name
+        run: |
+          echo "OWNER_LOWERCASE=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          echo "REPO_LOWERCASE=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]' | cut -d'/' -f2)" >> $GITHUB_ENV
+
+      # ARM64 아키텍처에 특화된 캐시 키 사용으로 캐시 효율성 향상
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-arm64-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-arm64-buildx-
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # API 이미지 빌드 및 푸시
+      - name: Build and push API Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./apps/api
+          push: true
+          tags: ghcr.io/${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-api:latest
+          target: production
+          platforms: linux/arm64 # OCI VM.Standard.A1.Flex는 ARM64 아키텍처 사용
+          cache-from: type=local,src=/tmp/.buildx-cache-api
+          cache-to: type=local,dest=/tmp/.buildx-cache-api-new,mode=max
+
+      # 웹 이미지 빌드 및 푸시
+      - name: Build and push Web Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./apps/web
+          push: true
+          tags: ghcr.io/${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-web:latest
+          target: production
+          platforms: linux/arm64 # OCI VM.Standard.A1.Flex는 ARM64 아키텍처 사용
+          cache-from: type=local,src=/tmp/.buildx-cache-web
+          cache-to: type=local,dest=/tmp/.buildx-cache-web-new,mode=max
+
+      # 캐시 업데이트
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache-api /tmp/.buildx-cache-web
+          mv /tmp/.buildx-cache-api-new /tmp/.buildx-cache-api || true
+          mv /tmp/.buildx-cache-web-new /tmp/.buildx-cache-web || true
+
+      # SSH를 통한 OCI 인스턴스 배포
+      - name: Deploy to OCI instance
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # 최신 이미지 가져오기
+            docker pull ghcr.io/${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-api:latest
+            docker pull ghcr.io/${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-web:latest
+
+            # 배포 디렉토리 생성
+            mkdir -p ~/bot-haesim-deploy
+            
+            # docker-compose.yml 생성
+            cat > ~/bot-haesim-deploy/docker-compose.yml << 'EOF'
+            version: '3.8'
+
+            services:
+              api:
+                image: ghcr.io/${OWNER_LOWERCASE}/${REPO_LOWERCASE}-api:latest
+                ports:
+                  - '3000:3000'
+                restart: unless-stopped
+                environment:
+                  - PORT=3000
+                  - BOT_ACCESS_TOKEN=${BOT_ACCESS_TOKEN}
+                  - DOMAIN_NAME=${DOMAIN_NAME}
+                  - BOT_NAME=${BOT_NAME}
+                  - BOT_USERNAME=${BOT_USERNAME}
+                  - BOT_ID=${BOT_ID}
+                  - DB_USERNAME=ADMIN
+                  - DB_PASSWORD=${DB_PASSWORD}
+                  - NODE_ENV=production
+                networks:
+                  - app-network
+
+              web:
+                image: ghcr.io/${OWNER_LOWERCASE}/${REPO_LOWERCASE}-web:latest
+                ports:
+                  - '3001:3000'
+                restart: unless-stopped
+                environment:
+                  - NODE_ENV=production
+                  - NEXT_PUBLIC_API_URL=http://api:3000
+                networks:
+                  - app-network
+                depends_on:
+                  - api
+
+            networks:
+              app-network:
+                driver: bridge
+            EOF
+
+            # 환경 변수 파일 생성
+            cat > ~/bot-haesim-deploy/.env << EOF
+            OWNER_LOWERCASE=${{ env.OWNER_LOWERCASE }}
+            REPO_LOWERCASE=${{ env.REPO_LOWERCASE }}
+            BOT_ACCESS_TOKEN=${{ secrets.BOT_ACCESS_TOKEN }}
+            DOMAIN_NAME=${{ secrets.DOMAIN_NAME }}
+            BOT_NAME=${{ secrets.BOT_NAME }}
+            BOT_USERNAME=${{ secrets.BOT_USERNAME }}
+            BOT_ID=${{ secrets.BOT_ID }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            EOF
+
+            # 컨테이너 실행
+            cd ~/bot-haesim-deploy
+            docker-compose down || true
+            docker-compose up -d
+
+            # 더 적극적인 이미지 정리 (12시간 이내 사용되지 않은 이미지)
+            docker image prune -a -f --filter "until=12h"
