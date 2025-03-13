@@ -29,7 +29,7 @@ export class BotService implements OnModuleInit {
     // Webex 프레임워크 초기화
     const config = {
       token: this.configService.get<string>('BOT_ACCESS_TOKEN'),
-      webhookUrl: `https://${this.configService.get<string>('DOMAIN_NAME')}/webex-bot/webhook`,
+      webhookUrl: `https://${this.configService.get<string>('DOMAIN_NAME')}/api/v1/webex-bot/webhook`,
       removeWebhooksOnStart: true,
     };
 
