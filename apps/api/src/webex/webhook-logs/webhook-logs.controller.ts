@@ -1,6 +1,6 @@
 import { Controller, Get, Param, Logger } from '@nestjs/common';
 import { WebhookLogsService } from './webhook-logs.service';
-import { WebhookLog } from './entities/webhook-log.entity';
+import { WebhookLog } from '../../entities/webex/webhook-log.entity';
 
 @Controller('webhook-logs')
 export class WebhookLogsController {

@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Message } from './entities/message.entity';
+import { Message } from '../entities/messages/message.entity';
 
 // 오류 처리를 위한 타입 정의
 interface ErrorWithMessage {

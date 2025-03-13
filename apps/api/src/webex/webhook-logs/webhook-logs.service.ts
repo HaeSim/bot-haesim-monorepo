@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { WebhookLog } from './entities/webhook-log.entity';
+import { WebhookLog } from '../../entities/webex/webhook-log.entity';
 import { WebhookData } from '../interfaces/webex-types';
 
 // 오류 처리를 위한 타입 정의

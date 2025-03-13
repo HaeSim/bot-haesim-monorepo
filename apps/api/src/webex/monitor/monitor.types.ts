@@ -1,5 +1,5 @@
-import { WebhookLog } from '../webhook-logs/entities/webhook-log.entity';
-import { Message } from '../../messages/entities/message.entity';
+import { WebhookLog } from '../../entities/webex/webhook-log.entity';
+import { Message } from '../../entities/messages/message.entity';
 
 export interface BotStatus {
   isOnline: boolean;
