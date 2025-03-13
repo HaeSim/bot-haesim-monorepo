@@ -19,6 +19,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=8080
+      - API_PREFIX=${API_PREFIX:-}
       - OLLAMA_API_URL=http://ollama:11434
     depends_on:
       ollama:
@@ -56,7 +57,7 @@ services:
       - app-network
     environment:
       - NODE_ENV=${NODE_ENV:-development}
-      - NEXT_PUBLIC_API_URL=/api
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-/api/v1}
       - API_SERVER_URL=http://api:8080
       - OLLAMA_API_URL=http://ollama:11434
     depends_on:

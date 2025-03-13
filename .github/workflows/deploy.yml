@@ -514,8 +514,8 @@ jobs:
           # Ollama 패키지 가시성 설정
           set_package_visibility "${{ env.REPO_LOWERCASE }}-ollama"
 
-      # SSH를 통한 OCI 인스턴스 배포
-      - name: Deploy to OCI instance
+      # SSH를 통한 클라우드 인스턴스 배포
+      - name: Deploy to cloud instance
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -523,9 +523,6 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           envs: OWNER_LOWERCASE,REPO_LOWERCASE,API_CHANGED,WEB_CHANGED,OLLAMA_CHANGED,API_BUILD_SUCCESS,WEB_BUILD_SUCCESS,OLLAMA_BUILD_SUCCESS
           script: |
-            # 배포 디렉토리 생성
-            mkdir -p ~/bot-haesim-deploy
-
             # 디버깅 정보 출력
             echo "디버깅 정보:"
             echo "OWNER_LOWERCASE: $OWNER_LOWERCASE"
@@ -591,14 +588,18 @@ jobs:
             check_and_pull_image "web" "${WEB_CHANGED}" "${WEB_BUILD_SUCCESS}" || WEB_EXISTS=false
             check_and_pull_image "ollama" "${OLLAMA_CHANGED}" "${OLLAMA_BUILD_SUCCESS}" || OLLAMA_EXISTS=false
 
+            # 앱 디렉터리 생성 (cloud-init에 의해 이미 생성됨)
+            echo "앱 디렉터리 확인..."
+            cd /home/ubuntu/app
+
             # docker-compose.yml 생성 (존재하는 서비스만 포함)
-            cat > ~/bot-haesim-deploy/docker-compose.yml << 'EOF'
+            cat > docker-compose.yml << 'EOF'
             services:
             EOF
 
             # API 서비스 추가 (존재하는 경우)
             if [ "$API_EXISTS" = "true" ]; then
-              cat >> ~/bot-haesim-deploy/docker-compose.yml << 'EOF'
+              cat >> docker-compose.yml << 'EOF'
               api:
                 image: ghcr.io/${OWNER_LOWERCASE}/${REPO_LOWERCASE}-api:latest
                 ports:
@@ -614,7 +615,7 @@ jobs:
                   - DB_USERNAME=ADMIN
                   - DB_PASSWORD=${DB_PASSWORD}
                   - NODE_ENV=production
-                  - API_PREFIX=
+                  - API_PREFIX=/api/v1
                   - OLLAMA_API_URL=http://ollama:11434
                 networks:
                   - app-network
@@ -631,7 +632,7 @@ jobs:
 
             # Web 서비스 추가 (존재하는 경우)
             if [ "$WEB_EXISTS" = "true" ]; then
-              cat >> ~/bot-haesim-deploy/docker-compose.yml << 'EOF'
+              cat >> docker-compose.yml << 'EOF'
 
               web:
                 image: ghcr.io/${OWNER_LOWERCASE}/${REPO_LOWERCASE}-web:latest
@@ -640,7 +641,7 @@ jobs:
                 restart: unless-stopped
                 environment:
                   - NODE_ENV=production
-                  - NEXT_PUBLIC_API_URL=/api
+                  - NEXT_PUBLIC_API_URL=/api/v1
                   - API_SERVER_URL=http://api:8080
                   - OLLAMA_API_URL=http://ollama:11434
                 networks:
@@ -655,7 +656,7 @@ jobs:
               
               # API 서비스가 존재하는 경우에만 의존성 추가
               if [ "$API_EXISTS" = "true" ]; then
-                cat >> ~/bot-haesim-deploy/docker-compose.yml << 'EOF'
+                cat >> docker-compose.yml << 'EOF'
                 depends_on:
                   - api
             EOF
@@ -666,15 +667,15 @@ jobs:
 
             # Ollama 서비스 추가 (존재하는 경우)
             if [ "$OLLAMA_EXISTS" = "true" ]; then
-              cat >> ~/bot-haesim-deploy/docker-compose.yml << 'EOF'
+              cat >> docker-compose.yml << 'EOF'
                   
               ollama:
                 image: ghcr.io/${OWNER_LOWERCASE}/${REPO_LOWERCASE}-ollama:latest
-                ports:
-                  - "11434:11434"
                 restart: unless-stopped
                 networks:
                   - app-network
+                volumes:
+                  - ollama-models:/root/.ollama
                 healthcheck:
                   test: ["CMD", "curl", "-f", "http://localhost:11434/api/version", "||", "exit", "1"]
                   interval: 60s
@@ -686,8 +687,12 @@ jobs:
               echo "Ollama 서비스가 존재하지 않아 docker-compose.yml에서 제외됩니다."
             fi
 
-            # 네트워크 설정 추가
-            cat >> ~/bot-haesim-deploy/docker-compose.yml << 'EOF'
+            # 볼륨 및 네트워크 설정 추가
+            cat >> docker-compose.yml << 'EOF'
+
+            volumes:
+              ollama-models:
+                # 모델 데이터 영구 보존
 
             networks:
               app-network:
@@ -695,7 +700,7 @@ jobs:
             EOF
 
             # 환경 변수 파일 생성
-            cat > ~/bot-haesim-deploy/.env << EOF
+            cat > .env << EOF
             OWNER_LOWERCASE=$OWNER_LOWERCASE
             REPO_LOWERCASE=$REPO_LOWERCASE
             BOT_ACCESS_TOKEN=${{ secrets.BOT_ACCESS_TOKEN }}
@@ -708,18 +713,7 @@ jobs:
 
             # docker-compose.yml 내용 확인
             echo "생성된 docker-compose.yml 내용:"
-            cat ~/bot-haesim-deploy/docker-compose.yml
-
-            # 컨테이너 실행 (존재하는 서비스만 재시작)
-            cd ~/bot-haesim-deploy
-
-            # 이미지 사전 확인으로 네트워크 대역폭 사용 최적화
-            echo "서비스 이미지 상태 확인..."
-            for service in api web ollama; do
-              if [ -n "$(docker images -q ghcr.io/$OWNER_LOWERCASE/$REPO_LOWERCASE-$service:latest 2>/dev/null)" ]; then
-                echo "$service 이미지가 로컬에 존재합니다."
-              fi
-            done
+            cat docker-compose.yml
 
             # 서비스가 하나라도 존재하는지 확인
             if [ "$API_EXISTS" = "true" ] || [ "$WEB_EXISTS" = "true" ] || [ "$OLLAMA_EXISTS" = "true" ]; then
