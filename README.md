@@ -9,15 +9,16 @@ Haesim Bot은 클라우드 호스팅된 마이크로서비스 기반 아키텍�
 ```mermaid
 graph TD
     subgraph "클라우드 인프라"
-        EC2["AWS EC2 인스턴스"]
+        CLOUD["클라우드 인스턴스"]
         NGINX["Nginx 리버스 프록시"]
         IPTABLES["방화벽 (iptables)"]
+        CLOUDINIT["Cloud-Init 자동화"]
     end
     
     subgraph "Docker 컨테이너"
         WEB["Next.js 애플리케이션\n(3000 포트)"]
         API["NestJS API\n(8080 포트)"]
-        OLLAMA["Ollama LLM\n(11434 포트)"]
+        OLLAMA["Ollama LLM\n(내부 네트워크 전용)"]
         DB["데이터베이스\n(Oracle)"]
     end
     
@@ -28,7 +29,8 @@ graph TD
     
     CLIENT[("사용자 브라우저")] -->|HTTPS| NGINX
     WEBEX <-->|Webhook 이벤트| API
-    GH -->|자동 배포| EC2
+    GH -->|자동 배포| CLOUD
+    CLOUDINIT -->|초기 설정| CLOUD
     
     NGINX --> WEB
     NGINX --> API
@@ -41,7 +43,7 @@ graph TD
 
 ## 🌐 인프라 구성
 
-AWS EC2에 호스팅되며 Nginx를 통한 리버스 프록시 설정으로 서비스 접근을 제공합니다.
+클라우드 인스턴스에 호스팅되며 Cloud-Init 자동화 및 Nginx 리버스 프록시 설정으로 서비스 접근을 제공합니다.
 
 ```mermaid
 flowchart TD
@@ -50,16 +52,16 @@ flowchart TD
         FIREWALL["IPTables 방화벽"]
         PORT1["3000 포트\n(Next.js)"]
         PORT2["8080 포트\n(NestJS API)"]
-        PORT3["11434 포트\n(Ollama - 내부망 전용)"]
+        DOCKER_NET["Docker 내부 네트워크"]
     end
     
     INTERNET["인터넷"] -->|HTTP/HTTPS| NGINX
     NGINX --> PORT1
     NGINX --> PORT2
-    PORT2 --> PORT3
+    PORT2 --> DOCKER_NET
     
     FIREWALL -->|허용: 80, 443, 3000| NGINX
-    FIREWALL -->|내부망 통신만 허용| PORT3
+    FIREWALL -->|Docker 내부 통신| DOCKER_NET
 ```
 
 ### URL 경로 및 프록시 설정
@@ -67,11 +69,10 @@ flowchart TD
 | 경로 | 서비스 | 설명 |
 |------|--------|------|
 | `/` | Next.js | 웹 애플리케이션 기본 경로 |
-| `/api/*` | NestJS | API 요청 (리라이팅 적용) |
+| `/api/v1/*` | NestJS | API 요청 (리라이팅 적용) |
 | `/webhook` | NestJS | Webex Webhook 수신 엔드포인트 |
 | `/monitor` | NestJS | 모니터링 대시보드 |
 | `/health` | NestJS | 헬스체크 엔드포인트 |
-| `/ollama/*` | Ollama | Ollama API (기본 차단됨) |
 | `/nginx-health` | Nginx | Nginx 헬스체크 |
 
 ## 📦 프로젝트 구조
@@ -267,14 +268,15 @@ graph LR
 - **텍스트 생성 모델**: 대화형 응답 생성
 
 ### 인프라 및 배포
-- **AWS EC2**: 클라우드 가상 서버
+- **클라우드 가상 서버**: 클라우드 인프라
+- **Cloud-Init**: 인스턴스 자동 초기화
 - **Nginx**: 웹 서버 및 리버스 프록시
 - **Docker**: 컨테이너화
 - **Docker Compose**: 다중 컨테이너 관리
 
 ### CI/CD 및 개발
 - **GitHub Actions**: 지속적 통합/배포
-- **Self-hosted Runner**: 로컬 실행 빌드 에이전트
+- **GitHub Container Registry**: 컨테이너 이미지 저장소
 - **Turborepo**: 모노레포 빌드 시스템
 - **TypeScript**: 정적 타입 지원
 - **ESLint**: 코드 품질 도구
@@ -324,22 +326,25 @@ docker-compose logs -f api
 
 ## 🚢 배포 구성
 
-Haesim Bot은 GitHub Actions를 통한 CI/CD 파이프라인과 Docker Compose를 사용한 컨테이너 배포를 지원합니다.
+Haesim Bot은 GitHub Actions를 통한 CI/CD 파이프라인과 Docker Compose를 사용한 컨테이너 배포를 지원합니다. Cloud-Init을 통해 초기 인스턴스 설정이 자동화됩니다.
 
 ```mermaid
 graph TD
     subgraph "배포 프로세스"
         GH["GitHub Repository"]
         GHA["GitHub Actions"]
-        RUNNER["Self-hosted Runner"]
-        SERVER["EC2 서버"]
+        REGISTRY["GitHub Container Registry"]
+        SERVER["클라우드 인스턴스"]
+        CLOUDINIT["Cloud-Init 초기화"]
         COMPOSE["Docker Compose"]
         CONTAINERS["Docker 컨테이너"]
     end
     
     GH -->|코드 변경| GHA
-    GHA -->|워크플로우 실행| RUNNER
-    RUNNER -->|빌드 및 배포 명령| SERVER
+    GHA -->|이미지 빌드 및 푸시| REGISTRY
+    GHA -->|배포 명령| SERVER
+    CLOUDINIT -->|인스턴스 초기 설정| SERVER
+    SERVER -->|이미지 Pull| REGISTRY
     SERVER -->|docker-compose 실행| COMPOSE
     COMPOSE -->|컨테이너 관리| CONTAINERS
 ```
@@ -348,9 +353,20 @@ graph TD
 
 1. GitHub 저장소에 변경사항 푸시
 2. GitHub Actions 워크플로우 트리거
-3. Self-hosted Runner에서 빌드 및 테스트 실행
-4. 성공 시 EC2 인스턴스에 배포
-5. Docker Compose로 컨테이너 업데이트
+3. 변경 감지 및 필요한 서비스 이미지만 빌드
+4. 빌드된 이미지를 GitHub Container Registry에 푸시
+5. SSH를 통해 클라우드 인스턴스에 배포 명령 실행
+6. Docker Compose로 컨테이너 업데이트
+
+### 인스턴스 초기화
+
+Cloud-Init을 통해 다음과 같은 초기 설정이 자동화됩니다:
+
+1. 필요한 패키지 설치 (Docker, Docker Compose, Nginx 등)
+2. Nginx 리버스 프록시 설정
+3. 배포 디렉토리 및 권한 구성
+4. 방화벽 규칙 설정
+5. GitHub 배포 키 설정
 
 ### 배포 방법
 
@@ -359,15 +375,22 @@ GitHub Actions를 통한 자동 배포가 구성되어 있습니다. `main` 브�
 수동 배포도 가능합니다:
 
 ```bash
-# EC2 인스턴스에서 실행
+# 클라우드 인스턴스에서 실행
 cd /home/ubuntu/app
-git pull
+
+# GitHub Container Registry 로그인 (토큰 필요)
+echo "$GH_PAT" | docker login ghcr.io -u USERNAME --password-stdin
+
+# 이미지 가져오기
+docker pull ghcr.io/username/repo-api:latest
+docker pull ghcr.io/username/repo-web:latest
+docker pull ghcr.io/username/repo-ollama:latest
 
 # 전체 스택 재배포
-docker-compose up -d --build
+docker-compose up -d
 
 # 특정 서비스만 재배포
-docker-compose up -d --build api
+docker-compose up -d api
 ```
 
 ## 🔍 모니터링 및 관리
@@ -403,6 +426,9 @@ docker-compose logs -f
 | `WEBEX_WEBHOOK_URL` | Webhook 엔드포인트 URL | `https://your-domain.com/webhook` |
 | `DATABASE_URL` | 데이터베이스 연결 문자열 | `oracle://username:password@host:port/service` |
 | `OLLAMA_API_URL` | Ollama API 접근 URL | `http://ollama:11434` |
+| `API_PREFIX` | API 경로 접두사 | `/api/v1` |
+| `NEXT_PUBLIC_API_URL` | 프론트엔드 API 요청 경로 | `/api/v1` |
+| `DOMAIN_NAME` | 서비스 도메인 이름 | `bot.example.com` |
 | `LOG_LEVEL` | 로깅 레벨 설정 | `info` |
 
 ### Webex Bot 설정
