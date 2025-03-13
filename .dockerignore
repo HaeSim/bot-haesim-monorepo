@@ -1,0 +1,27 @@
+# Docker 빌드 최적화를 위한 무시 파일 목록
+node_modules
+.turbo
+.next
+dist
+coverage
+.git
+.github
+
+# 앱별 빌드 캐시 무시
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/coverage
+
+# 개발 환경 파일 무시
+.env*.local
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 테스트 파일 무시
+**/__tests__
+**/*.test.*
+**/*.spec.*

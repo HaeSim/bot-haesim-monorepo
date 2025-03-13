@@ -11,8 +11,15 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  deploy:
+  # 변경 감지 및 의존성 그래프 분석 작업
+  analyze-changes:
     runs-on: ubuntu-latest
+    outputs:
+      api_changed: ${{ env.API_CHANGED }}
+      web_changed: ${{ env.WEB_CHANGED }}
+      ollama_changed: ${{ env.OLLAMA_CHANGED }}
+      owner_lowercase: ${{ env.OWNER_LOWERCASE }}
+      repo_lowercase: ${{ env.REPO_LOWERCASE }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -22,23 +29,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: 23 # Node.js 18 LTS 버전 사용
+          node-version: 23
           cache: 'yarn'
 
-      # Turborepo 캐시 복원
-      - name: Restore Turborepo cache
-        uses: actions/cache@v3
-        with:
-          path: .turbo
-          key: ${{ runner.os }}-turbo-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-turbo-
-
-      # 의존성 설치
-      - name: Install dependencies
+      # 의존성 설치 - 경량화된 설정
+      - name: Install essential dependencies
         run: yarn install --frozen-lockfile
 
-      # 변경된 앱 감지 - git diff 사용
+      # 변경된 앱 감지 - git diff 사용 + Turborepo 의존성 그래프 활용
       - name: Detect changed apps
         id: changes
         run: |
@@ -50,6 +48,14 @@ jobs:
           echo "API_CHANGED=false" >> $GITHUB_ENV
           echo "WEB_CHANGED=false" >> $GITHUB_ENV
           echo "OLLAMA_CHANGED=false" >> $GITHUB_ENV
+          
+          # 공통 파일 검사 (docker-compose.yml, .dockerignore 등)
+          if echo "$CHANGED_FILES" | grep -q "^docker-compose.yml\|^.dockerignore"; then
+            echo "공통 Docker 설정 파일 변경 감지됨"
+            echo "API_CHANGED=true" >> $GITHUB_ENV
+            echo "WEB_CHANGED=true" >> $GITHUB_ENV
+            echo "OLLAMA_CHANGED=true" >> $GITHUB_ENV
+          fi
 
           # apps/api 디렉토리의 파일이 변경되었는지 확인
           if echo "$CHANGED_FILES" | grep -q "^apps/api/"; then
@@ -69,20 +75,146 @@ jobs:
             echo "Ollama 변경 감지됨"
           fi
 
-          # packages 디렉토리의 파일이 변경되었는지 확인 (공통 패키지)
+          # packages 디렉토리의 파일이 변경되었는지 확인하고 의존성 그래프 분석
           if echo "$CHANGED_FILES" | grep -q "^packages/"; then
-            echo "API_CHANGED=true" >> $GITHUB_ENV
-            echo "WEB_CHANGED=true" >> $GITHUB_ENV
-            echo "OLLAMA_CHANGED=true" >> $GITHUB_ENV
-            echo "공통 패키지 변경 감지됨"
+            echo "패키지 변경 감지됨, 의존성 그래프 분석..."
+            
+            # 변경된 패키지들 식별
+            CHANGED_PACKAGES=$(echo "$CHANGED_FILES" | grep "^packages/" | cut -d "/" -f2 | sort -u)
+            
+            for package in $CHANGED_PACKAGES; do
+              echo "변경된 패키지: $package"
+              
+              # 패키지가 api에 영향을 미치는지 확인
+              if yarn --silent turbo run build --dry=json --filter="api...[packages/$package]" 2>/dev/null | grep -q "api"; then
+                echo "패키지 $package는 API에 영향을 줍니다"
+                echo "API_CHANGED=true" >> $GITHUB_ENV
+              fi
+              
+              # 패키지가 web에 영향을 미치는지 확인
+              if yarn --silent turbo run build --dry=json --filter="web...[packages/$package]" 2>/dev/null | grep -q "web"; then
+                echo "패키지 $package는 Web에 영향을 줍니다"
+                echo "WEB_CHANGED=true" >> $GITHUB_ENV
+              fi
+            done
           fi
 
           # 워크플로우 파일이 변경되었는지 확인
           if echo "$CHANGED_FILES" | grep -q "^.github/workflows/"; then
+            echo "워크플로우 파일 변경 감지됨, 모든 앱 빌드"
             echo "API_CHANGED=true" >> $GITHUB_ENV
             echo "WEB_CHANGED=true" >> $GITHUB_ENV
             echo "OLLAMA_CHANGED=true" >> $GITHUB_ENV
+          fi
+
+          # 변경사항이 없으면 모든 앱을 다시 빌드하지 않음
+          if [ "$(echo $API_CHANGED)" = "false" ] && [ "$(echo $WEB_CHANGED)" = "false" ] && [ "$(echo $OLLAMA_CHANGED)" = "false" ]; then
+            echo "변경사항 없음, 빌드 건너뜀"
+          fi
+
+      - name: Set lowercase owner name
+        run: |
+          echo "OWNER_LOWERCASE=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          echo "REPO_LOWERCASE=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]' | cut -d'/' -f2)" >> $GITHUB_ENV
+
+  # API 이미지 빌드 작업 (병렬 처리)
+  build-api:
+    needs: analyze-changes
+    if: ${{ needs.analyze-changes.outputs.api_changed == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 23
+          cache: 'yarn'
+
+      # Turborepo 캐시 복원
+      - name: Restore Turborepo cache
+        uses: actions/cache@v3
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-api-${{ hashFiles('**/yarn.lock') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-api-${{ hashFiles('**/yarn.lock') }}-
+            ${{ runner.os }}-turbo-api-
+
+      # 의존성 설치
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      # 변경된 앱 감지 - git diff 사용 + Turborepo 의존성 그래프 활용
+      - name: Detect changed apps
+        id: changes
+        run: |
+          # Git diff를 사용하여 변경된 파일 확인
+          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD || git diff --name-only HEAD~1 HEAD)
+          echo "Changed files: $CHANGED_FILES"
+
+          # 기본적으로 모든 앱이 변경되지 않은 것으로 설정
+          echo "API_CHANGED=false" >> $GITHUB_ENV
+          echo "WEB_CHANGED=false" >> $GITHUB_ENV
+          echo "OLLAMA_CHANGED=false" >> $GITHUB_ENV
+          
+          # 공통 파일 검사 (docker-compose.yml, .dockerignore 등)
+          if echo "$CHANGED_FILES" | grep -q "^docker-compose.yml\|^.dockerignore"; then
+            echo "공통 Docker 설정 파일 변경 감지됨"
+            echo "API_CHANGED=true" >> $GITHUB_ENV
+            echo "WEB_CHANGED=true" >> $GITHUB_ENV
+            echo "OLLAMA_CHANGED=true" >> $GITHUB_ENV
+          fi
+
+          # apps/api 디렉토리의 파일이 변경되었는지 확인
+          if echo "$CHANGED_FILES" | grep -q "^apps/api/"; then
+            echo "API_CHANGED=true" >> $GITHUB_ENV
+            echo "API 변경 감지됨"
+          fi
+
+          # apps/web 디렉토리의 파일이 변경되었는지 확인
+          if echo "$CHANGED_FILES" | grep -q "^apps/web/"; then
+            echo "WEB_CHANGED=true" >> $GITHUB_ENV
+            echo "Web 변경 감지됨"
+          fi
+
+          # apps/ollama 디렉토리의 파일이 변경되었는지 확인
+          if echo "$CHANGED_FILES" | grep -q "^apps/ollama/"; then
+            echo "OLLAMA_CHANGED=true" >> $GITHUB_ENV
+            echo "Ollama 변경 감지됨"
+          fi
+
+          # packages 디렉토리의 파일이 변경되었는지 확인하고 의존성 그래프 분석
+          if echo "$CHANGED_FILES" | grep -q "^packages/"; then
+            echo "패키지 변경 감지됨, 의존성 그래프 분석..."
+            
+            # 변경된 패키지들 식별
+            CHANGED_PACKAGES=$(echo "$CHANGED_FILES" | grep "^packages/" | cut -d "/" -f2 | sort -u)
+            
+            for package in $CHANGED_PACKAGES; do
+              echo "변경된 패키지: $package"
+              
+              # 패키지가 api에 영향을 미치는지 확인
+              if yarn --silent turbo run build --dry=json --filter="api...[packages/$package]" 2>/dev/null | grep -q "api"; then
+                echo "패키지 $package는 API에 영향을 줍니다"
+                echo "API_CHANGED=true" >> $GITHUB_ENV
+              fi
+              
+              # 패키지가 web에 영향을 미치는지 확인
+              if yarn --silent turbo run build --dry=json --filter="web...[packages/$package]" 2>/dev/null | grep -q "web"; then
+                echo "패키지 $package는 Web에 영향을 줍니다"
+                echo "WEB_CHANGED=true" >> $GITHUB_ENV
+              fi
+            done
+          fi
+
+          # 워크플로우 파일이 변경되었는지 확인
+          if echo "$CHANGED_FILES" | grep -q "^.github/workflows/"; then
             echo "워크플로우 파일 변경 감지됨, 모든 앱 빌드"
+            echo "API_CHANGED=true" >> $GITHUB_ENV
+            echo "WEB_CHANGED=true" >> $GITHUB_ENV
+            echo "OLLAMA_CHANGED=true" >> $GITHUB_ENV
           fi
 
           # 변경사항이 없으면 모든 앱을 다시 빌드하지 않음

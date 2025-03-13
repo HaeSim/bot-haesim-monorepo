@@ -1,25 +1,32 @@
+version: "3.8"
+
 services:
   api:
     build:
       context: .
       dockerfile: ./apps/api/Dockerfile
-      target: development
+      target: ${NODE_ENV:-development}
     volumes:
-      - ./:/usr/src/app
-      - /usr/src/app/node_modules
-    command: yarn workspace api dev
+      # 개발 환경에서만 볼륨 마운트 (NODE_ENV=development 일 때)
+      - ${NODE_ENV:-development} == development: ./apps/api/src:/usr/src/app/apps/api/src
+      - ${NODE_ENV:-development} == development: ./apps/api/views:/usr/src/app/apps/api/views
+      - ${NODE_ENV:-development} == development: ./apps/api/public:/usr/src/app/apps/api/public
+    command: ${NODE_ENV:-development} == development && yarn workspace api dev || node dist/main
     ports:
-      - '${API_PORT}:8080'
+      - '${API_PORT:-8080}:8080'
     networks:
       - app-network
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=${NODE_ENV:-development}
       - PORT=8080
       - OLLAMA_API_URL=http://ollama:11434
+    depends_on:
+      ollama:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health", "||", "exit", "1"]
-      interval: 30s
-      timeout: 10s
+      interval: 10s
+      timeout: 5s
       retries: 3
       start_period: 5s
 
@@ -27,24 +34,28 @@ services:
     build:
       context: .
       dockerfile: ./apps/web/Dockerfile
-      target: development
+      target: ${NODE_ENV:-development}
     volumes:
-      - ./:/usr/src/app
-      - /usr/src/app/node_modules
-    command: yarn workspace web dev
+      # 개발 환경에서만 볼륨 마운트 (NODE_ENV=development 일 때)
+      - ${NODE_ENV:-development} == development: ./apps/web/src:/usr/src/app/apps/web/src
+      - ${NODE_ENV:-development} == development: ./apps/web/public:/usr/src/app/apps/web/public
+    command: ${NODE_ENV:-development} == development && yarn workspace web dev || node .next/standalone/server.js
     ports:
-      - '${WEB_PORT}:3000' # NextJS runs on 3000 internally
+      - '${WEB_PORT:-3000}:3000'
     networks:
       - app-network
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=${NODE_ENV:-development}
       - NEXT_PUBLIC_API_URL=/api
       - API_SERVER_URL=http://api:8080
       - OLLAMA_API_URL=http://ollama:11434
+    depends_on:
+      api:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000", "||", "exit", "1"]
-      interval: 30s
-      timeout: 10s
+      interval: 10s
+      timeout: 5s
       retries: 3
       start_period: 5s
 
@@ -53,16 +64,22 @@ services:
       context: ./apps/ollama
       dockerfile: Dockerfile
     ports:
-      - "11434:11434"
+      - "${OLLAMA_PORT:-11434}:11434"
     restart: unless-stopped
+    volumes:
+      - ollama-models:/root/.ollama
     networks:
       - app-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:11434/api/version", "||", "exit", "1"]
-      interval: 60s
-      timeout: 30s
-      retries: 5
-      start_period: 60s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  ollama-models:
+    # 모델 데이터 영구 보존으로 재시작/배포 시간 단축
 
 networks:
   app-network:
