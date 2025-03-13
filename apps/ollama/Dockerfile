@@ -15,5 +15,8 @@ RUN chmod +x /usr/local/bin/ollama-entrypoint.sh
 HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -f http://localhost:11434/api/version || exit 1
 
+# ENTRYPOINT 재정의
+ENTRYPOINT []
+
 # 컨테이너 실행 시 Ollama 서버 시작
 CMD ["/usr/local/bin/ollama-entrypoint.sh"]
