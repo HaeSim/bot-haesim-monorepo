@@ -25,16 +25,16 @@ export class OllamaService {
     prompt: string,
     model = this.defaultModel
   ): Observable<string> {
-    const url = `${this.apiUrl}/api/generate`;
+    const url = `${this.apiUrl}/api/chat`;
 
     return this.httpService
       .post(url, {
         model,
-        prompt,
+        messages: [{ role: 'user', content: prompt }],
         stream: false,
       })
       .pipe(
-        map((response: AxiosResponse) => response.data.response),
+        map((response: AxiosResponse) => response.data.message.content),
         catchError((error: AxiosError) => {
           this.logger.error(
             `Error calling Ollama API: ${error.message}`,
@@ -51,14 +51,14 @@ export class OllamaService {
     prompt: string,
     model = this.defaultModel
   ): Observable<string> {
-    const url = `${this.apiUrl}/api/generate`;
+    const url = `${this.apiUrl}/api/chat`;
 
     return this.httpService
       .post(
         url,
         {
           model,
-          prompt,
+          messages: [{ role: 'user', content: prompt }],
           stream: true,
         },
         {
@@ -83,8 +83,8 @@ export class OllamaService {
 
                 try {
                   const json = JSON.parse(line);
-                  if (json.response) {
-                    subscriber.next(json.response);
+                  if (json.message?.content) {
+                    subscriber.next(json.message.content);
                   }
 
                   if (json.done) {
