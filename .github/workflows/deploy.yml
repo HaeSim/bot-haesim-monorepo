@@ -15,11 +15,11 @@ jobs:
   analyze-changes:
     runs-on: ubuntu-latest
     outputs:
-      api_changed: ${{ env.API_CHANGED }}
-      web_changed: ${{ env.WEB_CHANGED }}
-      ollama_changed: ${{ env.OLLAMA_CHANGED }}
-      owner_lowercase: ${{ env.OWNER_LOWERCASE }}
-      repo_lowercase: ${{ env.REPO_LOWERCASE }}
+      api_changed: ${{ steps.detect-changes.outputs.api_changed }}
+      web_changed: ${{ steps.detect-changes.outputs.web_changed }}
+      ollama_changed: ${{ steps.detect-changes.outputs.ollama_changed }}
+      owner_lowercase: ${{ steps.set-lowercase.outputs.owner_lowercase }}
+      repo_lowercase: ${{ steps.set-lowercase.outputs.repo_lowercase }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -38,12 +38,12 @@ jobs:
 
       # 변경된 앱 감지 - git diff 사용 + Turborepo 의존성 그래프 활용
       - name: Detect changed apps
-        id: changes
+        id: detect-changes
         run: |
           # 기본적으로 모든 앱이 변경된 것으로 설정 (초기 실행 또는 얕은 히스토리 대응)
-          echo "API_CHANGED=true" >> $GITHUB_ENV
-          echo "WEB_CHANGED=true" >> $GITHUB_ENV
-          echo "OLLAMA_CHANGED=true" >> $GITHUB_ENV
+          CHANGE_API=true
+          CHANGE_WEB=true
+          CHANGE_OLLAMA=true
 
           # Git 히스토리가 있는지 확인
           if git rev-parse HEAD~1 > /dev/null 2>&1; then
@@ -53,33 +53,33 @@ jobs:
             echo "Changed files: $CHANGED_FILES"
             
             # 기본적으로 모든 앱이 변경되지 않은 것으로 재설정
-            echo "API_CHANGED=false" >> $GITHUB_ENV
-            echo "WEB_CHANGED=false" >> $GITHUB_ENV
-            echo "OLLAMA_CHANGED=false" >> $GITHUB_ENV
+            CHANGE_API=false
+            CHANGE_WEB=false
+            CHANGE_OLLAMA=false
 
             # 공통 파일 검사 (docker-compose.yml, .dockerignore 등)
             if echo "$CHANGED_FILES" | grep -q "^docker-compose.yml\|^.dockerignore"; then
               echo "공통 Docker 설정 파일 변경 감지됨"
-              echo "API_CHANGED=true" >> $GITHUB_ENV
-              echo "WEB_CHANGED=true" >> $GITHUB_ENV
-              echo "OLLAMA_CHANGED=true" >> $GITHUB_ENV
+              CHANGE_API=true
+              CHANGE_WEB=true
+              CHANGE_OLLAMA=true
             fi
 
             # apps/api 디렉토리의 파일이 변경되었는지 확인
             if echo "$CHANGED_FILES" | grep -q "^apps/api/"; then
-              echo "API_CHANGED=true" >> $GITHUB_ENV
+              CHANGE_API=true
               echo "API 변경 감지됨"
             fi
 
             # apps/web 디렉토리의 파일이 변경되었는지 확인
             if echo "$CHANGED_FILES" | grep -q "^apps/web/"; then
-              echo "WEB_CHANGED=true" >> $GITHUB_ENV
+              CHANGE_WEB=true
               echo "Web 변경 감지됨"
             fi
 
             # apps/ollama 디렉토리의 파일이 변경되었는지 확인
             if echo "$CHANGED_FILES" | grep -q "^apps/ollama/"; then
-              echo "OLLAMA_CHANGED=true" >> $GITHUB_ENV
+              CHANGE_OLLAMA=true
               echo "Ollama 변경 감지됨"
             fi
 
@@ -96,13 +96,13 @@ jobs:
                 # 패키지가 api에 영향을 미치는지 확인
                 if yarn --silent turbo run build --dry=json --filter="api...[packages/$package]" 2>/dev/null | grep -q "api"; then
                   echo "패키지 $package는 API에 영향을 줍니다"
-                  echo "API_CHANGED=true" >> $GITHUB_ENV
+                  CHANGE_API=true
                 fi
                 
                 # 패키지가 web에 영향을 미치는지 확인
                 if yarn --silent turbo run build --dry=json --filter="web...[packages/$package]" 2>/dev/null | grep -q "web"; then
                   echo "패키지 $package는 Web에 영향을 줍니다"
-                  echo "WEB_CHANGED=true" >> $GITHUB_ENV
+                  CHANGE_WEB=true
                 fi
               done
             fi
@@ -110,24 +110,46 @@ jobs:
             # 워크플로우 파일이 변경되었는지 확인
             if echo "$CHANGED_FILES" | grep -q "^.github/workflows/"; then
               echo "워크플로우 파일 변경 감지됨, 모든 앱 빌드"
-              echo "API_CHANGED=true" >> $GITHUB_ENV
-              echo "WEB_CHANGED=true" >> $GITHUB_ENV
-              echo "OLLAMA_CHANGED=true" >> $GITHUB_ENV
+              CHANGE_API=true
+              CHANGE_WEB=true
+              CHANGE_OLLAMA=true
             fi
           else
             echo "이전 커밋 히스토리가 감지되지 않았습니다. 초기 실행으로 간주하여 모든 앱을 빌드합니다."
           fi
 
-      - name: Set lowercase owner name
-        run: |
-          echo "OWNER_LOWERCASE=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-          echo "REPO_LOWERCASE=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]' | cut -d'/' -f2)" >> $GITHUB_ENV
+          # GitHub Actions 출력 설정
+          echo "api_changed=$CHANGE_API" >> $GITHUB_OUTPUT
+          echo "web_changed=$CHANGE_WEB" >> $GITHUB_OUTPUT
+          echo "ollama_changed=$CHANGE_OLLAMA" >> $GITHUB_OUTPUT
 
-  # API 이미지 빌드 작업 (병렬 처리)
+          # 디버깅용 출력
+          echo "API_CHANGED: $CHANGE_API"
+          echo "WEB_CHANGED: $CHANGE_WEB"
+          echo "OLLAMA_CHANGED: $CHANGE_OLLAMA"
+
+      - name: Set lowercase owner name
+        id: set-lowercase
+        run: |
+          OWNER_LOWERCASE=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')
+          REPO_LOWERCASE=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]' | cut -d'/' -f2)
+          
+          echo "owner_lowercase=$OWNER_LOWERCASE" >> $GITHUB_OUTPUT
+          echo "repo_lowercase=$REPO_LOWERCASE" >> $GITHUB_OUTPUT
+          
+          echo "OWNER_LOWERCASE: $OWNER_LOWERCASE"
+          echo "REPO_LOWERCASE: $REPO_LOWERCASE"
+
+  # API 이미지 빌드 작업
   build-api:
     needs: analyze-changes
     if: ${{ needs.analyze-changes.outputs.api_changed == 'true' }}
     runs-on: ubuntu-latest
+    outputs:
+      api_build_success: ${{ steps.check-build.outputs.build_success }}
+    env:
+      OWNER_LOWERCASE: ${{ needs.analyze-changes.outputs.owner_lowercase }}
+      REPO_LOWERCASE: ${{ needs.analyze-changes.outputs.repo_lowercase }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -151,94 +173,6 @@ jobs:
       # 의존성 설치
       - name: Install dependencies
         run: yarn install --frozen-lockfile
-
-      # 변경된 앱 감지 - git diff 사용 + Turborepo 의존성 그래프 활용
-      - name: Detect changed apps
-        id: changes
-        run: |
-          # Git diff를 사용하여 변경된 파일 확인 - 안전한 방식으로 이전 커밋 참조
-          if git rev-parse HEAD^ > /dev/null 2>&1; then
-            CHANGED_FILES=$(git diff --name-only HEAD^ HEAD)
-          elif git rev-parse HEAD~1 > /dev/null 2>&1; then
-            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
-          else
-            # 히스토리가 없는 경우 빈 문자열 설정
-            CHANGED_FILES=""
-          fi
-          echo "Changed files: $CHANGED_FILES"
-
-          # 기본적으로 모든 앱이 변경되지 않은 것으로 설정
-          echo "API_CHANGED=false" >> $GITHUB_ENV
-          echo "WEB_CHANGED=false" >> $GITHUB_ENV
-          echo "OLLAMA_CHANGED=false" >> $GITHUB_ENV
-
-          # 공통 파일 검사 (docker-compose.yml, .dockerignore 등)
-          if echo "$CHANGED_FILES" | grep -q "^docker-compose.yml\|^.dockerignore"; then
-            echo "공통 Docker 설정 파일 변경 감지됨"
-            echo "API_CHANGED=true" >> $GITHUB_ENV
-            echo "WEB_CHANGED=true" >> $GITHUB_ENV
-            echo "OLLAMA_CHANGED=true" >> $GITHUB_ENV
-          fi
-
-          # apps/api 디렉토리의 파일이 변경되었는지 확인
-          if echo "$CHANGED_FILES" | grep -q "^apps/api/"; then
-            echo "API_CHANGED=true" >> $GITHUB_ENV
-            echo "API 변경 감지됨"
-          fi
-
-          # apps/web 디렉토리의 파일이 변경되었는지 확인
-          if echo "$CHANGED_FILES" | grep -q "^apps/web/"; then
-            echo "WEB_CHANGED=true" >> $GITHUB_ENV
-            echo "Web 변경 감지됨"
-          fi
-
-          # apps/ollama 디렉토리의 파일이 변경되었는지 확인
-          if echo "$CHANGED_FILES" | grep -q "^apps/ollama/"; then
-            echo "OLLAMA_CHANGED=true" >> $GITHUB_ENV
-            echo "Ollama 변경 감지됨"
-          fi
-
-          # packages 디렉토리의 파일이 변경되었는지 확인하고 의존성 그래프 분석
-          if echo "$CHANGED_FILES" | grep -q "^packages/"; then
-            echo "패키지 변경 감지됨, 의존성 그래프 분석..."
-            
-            # 변경된 패키지들 식별
-            CHANGED_PACKAGES=$(echo "$CHANGED_FILES" | grep "^packages/" | cut -d "/" -f2 | sort -u)
-            
-            for package in $CHANGED_PACKAGES; do
-              echo "변경된 패키지: $package"
-              
-              # 패키지가 api에 영향을 미치는지 확인
-              if yarn --silent turbo run build --dry=json --filter="api...[packages/$package]" 2>/dev/null | grep -q "api"; then
-                echo "패키지 $package는 API에 영향을 줍니다"
-                echo "API_CHANGED=true" >> $GITHUB_ENV
-              fi
-              
-              # 패키지가 web에 영향을 미치는지 확인
-              if yarn --silent turbo run build --dry=json --filter="web...[packages/$package]" 2>/dev/null | grep -q "web"; then
-                echo "패키지 $package는 Web에 영향을 줍니다"
-                echo "WEB_CHANGED=true" >> $GITHUB_ENV
-              fi
-            done
-          fi
-
-          # 워크플로우 파일이 변경되었는지 확인
-          if echo "$CHANGED_FILES" | grep -q "^.github/workflows/"; then
-            echo "워크플로우 파일 변경 감지됨, 모든 앱 빌드"
-            echo "API_CHANGED=true" >> $GITHUB_ENV
-            echo "WEB_CHANGED=true" >> $GITHUB_ENV
-            echo "OLLAMA_CHANGED=true" >> $GITHUB_ENV
-          fi
-
-          # 변경사항이 없으면 모든 앱을 다시 빌드하지 않음
-          if [ "$(echo $API_CHANGED)" = "false" ] && [ "$(echo $WEB_CHANGED)" = "false" ] && [ "$(echo $OLLAMA_CHANGED)" = "false" ]; then
-            echo "변경사항 없음, 빌드 건너뜀"
-          fi
-
-      - name: Set lowercase owner name
-        run: |
-          echo "OWNER_LOWERCASE=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-          echo "REPO_LOWERCASE=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]' | cut -d'/' -f2)" >> $GITHUB_ENV
 
       # GitHub Container Registry 로그인
       - name: Login to GitHub Container Registry
@@ -266,35 +200,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-arm64-buildx-api-
             
-      # Docker 레이어 캐싱 - Web용
-      - name: Cache Docker layers for Web
-        uses: actions/cache@v3
-        with:
-          path: /tmp/.buildx-cache-web
-          key: ${{ runner.os }}-arm64-buildx-web-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-arm64-buildx-web-
-            
-      # Docker 레이어 캐싱 - Ollama용
-      - name: Cache Docker layers for Ollama
-        uses: actions/cache@v3
-        with:
-          path: /tmp/.buildx-cache-ollama
-          key: ${{ runner.os }}-arm64-buildx-ollama-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-arm64-buildx-ollama-
-            
       # 캐시 디렉토리 생성 (존재하지 않을 경우)
       - name: Create cache directories
-        run: |
-          mkdir -p /tmp/.buildx-cache-api
-          mkdir -p /tmp/.buildx-cache-web
-          mkdir -p /tmp/.buildx-cache-ollama
+        run: mkdir -p /tmp/.buildx-cache-api
 
-      # API 이미지 빌드 및 푸시 (변경 감지 시에만)
+      # API 이미지 빌드 및 푸시
       - name: Build and push API Docker image
         id: build-api
-        if: env.API_CHANGED == 'true'
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -313,22 +225,90 @@ jobs:
 
       # API 이미지 빌드 결과 확인
       - name: Check API image build result
-        if: env.API_CHANGED == 'true'
+        id: check-build
         run: |
           echo "API 이미지 빌드 결과 확인..."
           if [ "${{ steps.build-api.outcome }}" == "success" ]; then
             echo "API 이미지 빌드 성공"
-            echo "API_BUILD_SUCCESS=true" >> $GITHUB_ENV
+            echo "build_success=true" >> $GITHUB_OUTPUT
           else
             echo "API 이미지 빌드 실패"
-            echo "API_BUILD_SUCCESS=false" >> $GITHUB_ENV
+            echo "build_success=false" >> $GITHUB_OUTPUT
           fi
           docker image ls | grep "${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-api" || echo "API 이미지가 빌드되지 않았습니다."
 
-      # 웹 이미지 빌드 및 푸시 (변경 감지 시에만)
+      # 캐시 업데이트
+      - name: Move cache
+        run: |
+          # API 캐시 이동
+          if [ -d "/tmp/.buildx-cache-api-new" ]; then
+            rm -rf /tmp/.buildx-cache-api
+            mkdir -p /tmp/.buildx-cache-api
+            cp -R /tmp/.buildx-cache-api-new/* /tmp/.buildx-cache-api/ || true
+            echo "API 빌드 캐시 업데이트 완료"
+          fi
+
+  # Web 이미지 빌드 작업
+  build-web:
+    needs: analyze-changes
+    if: ${{ needs.analyze-changes.outputs.web_changed == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      web_build_success: ${{ steps.check-build.outputs.build_success }}
+    env:
+      OWNER_LOWERCASE: ${{ needs.analyze-changes.outputs.owner_lowercase }}
+      REPO_LOWERCASE: ${{ needs.analyze-changes.outputs.repo_lowercase }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 23
+          cache: 'yarn'
+
+      # Turborepo 캐시 복원
+      - name: Restore Turborepo cache
+        uses: actions/cache@v3
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-web-${{ hashFiles('**/yarn.lock') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-web-${{ hashFiles('**/yarn.lock') }}-
+            ${{ runner.os }}-turbo-web-
+
+      # 의존성 설치
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      # GitHub Container Registry 로그인
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      # Docker 레이어 캐싱 - Web용
+      - name: Cache Docker layers for Web
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache-web
+          key: ${{ runner.os }}-arm64-buildx-web-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-arm64-buildx-web-
+            
+      # 캐시 디렉토리 생성 (존재하지 않을 경우)
+      - name: Create cache directories
+        run: mkdir -p /tmp/.buildx-cache-web
+
+      # Web 이미지 빌드 및 푸시
       - name: Build and push Web Docker image
         id: build-web
-        if: env.WEB_CHANGED == 'true'
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -347,22 +327,70 @@ jobs:
 
       # Web 이미지 빌드 결과 확인
       - name: Check Web image build result
-        if: env.WEB_CHANGED == 'true'
+        id: check-build
         run: |
           echo "Web 이미지 빌드 결과 확인..."
           if [ "${{ steps.build-web.outcome }}" == "success" ]; then
             echo "Web 이미지 빌드 성공"
-            echo "WEB_BUILD_SUCCESS=true" >> $GITHUB_ENV
+            echo "build_success=true" >> $GITHUB_OUTPUT
           else
             echo "Web 이미지 빌드 실패"
-            echo "WEB_BUILD_SUCCESS=false" >> $GITHUB_ENV
+            echo "build_success=false" >> $GITHUB_OUTPUT
           fi
           docker image ls | grep "${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-web" || echo "Web 이미지가 빌드되지 않았습니다."
 
-      # Ollama 이미지 빌드 및 푸시 (변경 감지 시에만)
+      # 캐시 업데이트
+      - name: Move cache
+        run: |
+          # Web 캐시 이동
+          if [ -d "/tmp/.buildx-cache-web-new" ]; then
+            rm -rf /tmp/.buildx-cache-web
+            mkdir -p /tmp/.buildx-cache-web
+            cp -R /tmp/.buildx-cache-web-new/* /tmp/.buildx-cache-web/ || true
+            echo "Web 빌드 캐시 업데이트 완료"
+          fi
+
+  # Ollama 이미지 빌드 작업
+  build-ollama:
+    needs: analyze-changes
+    if: ${{ needs.analyze-changes.outputs.ollama_changed == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      ollama_build_success: ${{ steps.check-build.outputs.build_success }}
+    env:
+      OWNER_LOWERCASE: ${{ needs.analyze-changes.outputs.owner_lowercase }}
+      REPO_LOWERCASE: ${{ needs.analyze-changes.outputs.repo_lowercase }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # GitHub Container Registry 로그인
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      # Docker 레이어 캐싱 - Ollama용
+      - name: Cache Docker layers for Ollama
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache-ollama
+          key: ${{ runner.os }}-arm64-buildx-ollama-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-arm64-buildx-ollama-
+            
+      # 캐시 디렉토리 생성 (존재하지 않을 경우)
+      - name: Create cache directories
+        run: mkdir -p /tmp/.buildx-cache-ollama
+
+      # Ollama 이미지 빌드 및 푸시
       - name: Build and push Ollama Docker image
         id: build-ollama
-        if: env.OLLAMA_CHANGED == 'true'
         uses: docker/build-push-action@v4
         with:
           context: ./apps/ollama
@@ -378,37 +406,21 @@ jobs:
 
       # Ollama 이미지 빌드 결과 확인
       - name: Check Ollama image build result
-        if: env.OLLAMA_CHANGED == 'true'
+        id: check-build
         run: |
           echo "Ollama 이미지 빌드 결과 확인..."
           if [ "${{ steps.build-ollama.outcome }}" == "success" ]; then
             echo "Ollama 이미지 빌드 성공"
-            echo "OLLAMA_BUILD_SUCCESS=true" >> $GITHUB_ENV
+            echo "build_success=true" >> $GITHUB_OUTPUT
           else
             echo "Ollama 이미지 빌드 실패"
-            echo "OLLAMA_BUILD_SUCCESS=false" >> $GITHUB_ENV
+            echo "build_success=false" >> $GITHUB_OUTPUT
           fi
           docker image ls | grep "${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-ollama" || echo "Ollama 이미지가 빌드되지 않았습니다."
 
       # 캐시 업데이트
       - name: Move cache
         run: |
-          # API 캐시 이동
-          if [ -d "/tmp/.buildx-cache-api-new" ]; then
-            rm -rf /tmp/.buildx-cache-api
-            mkdir -p /tmp/.buildx-cache-api
-            cp -R /tmp/.buildx-cache-api-new/* /tmp/.buildx-cache-api/ || true
-            echo "API 빌드 캐시 업데이트 완료"
-          fi
-          
-          # Web 캐시 이동
-          if [ -d "/tmp/.buildx-cache-web-new" ]; then
-            rm -rf /tmp/.buildx-cache-web
-            mkdir -p /tmp/.buildx-cache-web
-            cp -R /tmp/.buildx-cache-web-new/* /tmp/.buildx-cache-web/ || true
-            echo "Web 빌드 캐시 업데이트 완료"
-          fi
-          
           # Ollama 캐시 이동
           if [ -d "/tmp/.buildx-cache-ollama-new" ]; then
             rm -rf /tmp/.buildx-cache-ollama
@@ -416,6 +428,24 @@ jobs:
             cp -R /tmp/.buildx-cache-ollama-new/* /tmp/.buildx-cache-ollama/ || true
             echo "Ollama 빌드 캐시 업데이트 완료"
           fi
+
+  # 이미지 패키지를 공개로 설정 및 배포
+  deploy:
+    needs: [analyze-changes, build-api, build-web, build-ollama]
+    if: ${{ always() && needs.analyze-changes.result == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      OWNER_LOWERCASE: ${{ needs.analyze-changes.outputs.owner_lowercase }}
+      REPO_LOWERCASE: ${{ needs.analyze-changes.outputs.repo_lowercase }}
+      API_CHANGED: ${{ needs.analyze-changes.outputs.api_changed }}
+      WEB_CHANGED: ${{ needs.analyze-changes.outputs.web_changed }}
+      OLLAMA_CHANGED: ${{ needs.analyze-changes.outputs.ollama_changed }}
+      API_BUILD_SUCCESS: ${{ needs.build-api.outputs.api_build_success || 'false' }}
+      WEB_BUILD_SUCCESS: ${{ needs.build-web.outputs.web_build_success || 'false' }}
+      OLLAMA_BUILD_SUCCESS: ${{ needs.build-ollama.outputs.ollama_build_success || 'false' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       # 이미지 패키지를 공개로 설정
       - name: Make packages public
@@ -473,10 +503,6 @@ jobs:
             # 배포 디렉토리 생성
             mkdir -p ~/bot-haesim-deploy
 
-            # 환경 변수 설정
-            OWNER_LOWERCASE="${OWNER_LOWERCASE}"
-            REPO_LOWERCASE="${REPO_LOWERCASE}"
-
             # 디버깅 정보 출력
             echo "디버깅 정보:"
             echo "OWNER_LOWERCASE: $OWNER_LOWERCASE"
@@ -484,9 +510,9 @@ jobs:
             echo "API_CHANGED: ${API_CHANGED}"
             echo "WEB_CHANGED: ${WEB_CHANGED}"
             echo "OLLAMA_CHANGED: ${OLLAMA_CHANGED}"
-            echo "API_BUILD_SUCCESS: ${API_BUILD_SUCCESS:-false}"
-            echo "WEB_BUILD_SUCCESS: ${WEB_BUILD_SUCCESS:-false}"
-            echo "OLLAMA_BUILD_SUCCESS: ${OLLAMA_BUILD_SUCCESS:-false}"
+            echo "API_BUILD_SUCCESS: ${API_BUILD_SUCCESS}"
+            echo "WEB_BUILD_SUCCESS: ${WEB_BUILD_SUCCESS}"
+            echo "OLLAMA_BUILD_SUCCESS: ${OLLAMA_BUILD_SUCCESS}"
 
             # GitHub Container Registry 로그인 (PAT 토큰 사용)
             if [ ! -z "${{ secrets.GH_PAT }}" ]; then
@@ -538,9 +564,9 @@ jobs:
             WEB_EXISTS=true
             OLLAMA_EXISTS=true
 
-            check_and_pull_image "api" "${API_CHANGED}" "${API_BUILD_SUCCESS:-false}" || API_EXISTS=false
-            check_and_pull_image "web" "${WEB_CHANGED}" "${WEB_BUILD_SUCCESS:-false}" || WEB_EXISTS=false
-            check_and_pull_image "ollama" "${OLLAMA_CHANGED}" "${OLLAMA_BUILD_SUCCESS:-false}" || OLLAMA_EXISTS=false
+            check_and_pull_image "api" "${API_CHANGED}" "${API_BUILD_SUCCESS}" || API_EXISTS=false
+            check_and_pull_image "web" "${WEB_CHANGED}" "${WEB_BUILD_SUCCESS}" || WEB_EXISTS=false
+            check_and_pull_image "ollama" "${OLLAMA_CHANGED}" "${OLLAMA_BUILD_SUCCESS}" || OLLAMA_EXISTS=false
 
             # docker-compose.yml 생성 (존재하는 서비스만 포함)
             cat > ~/bot-haesim-deploy/docker-compose.yml << 'EOF'
@@ -676,21 +702,9 @@ jobs:
             if [ "$API_EXISTS" = "true" ] || [ "$WEB_EXISTS" = "true" ] || [ "$OLLAMA_EXISTS" = "true" ]; then
               echo "서비스를 재시작합니다..."
               
-              # 변경된 서비스만 재시작
-              if [ "${API_CHANGED}" = "true" ] || [ "${WEB_CHANGED}" = "true" ]; then
-                echo "API 또는 Web이 변경되어 모든 서비스를 재시작합니다."
-                docker-compose down || true
-                docker-compose up -d
-              elif [ "${OLLAMA_CHANGED}" = "true" ] && [ "$OLLAMA_EXISTS" = "true" ]; then
-                echo "Ollama만 변경되어 Ollama 서비스만 재시작합니다."
-                docker-compose stop ollama || true
-                docker-compose rm -f ollama || true
-                docker-compose up -d ollama
-              else
-                echo "변경된 서비스가 없거나 빌드에 실패했습니다. 모든 서비스를 재시작합니다."
-                docker-compose down || true
-                docker-compose up -d
-              fi
+              # 변경된 서비스만 재시작 또는 모든 서비스 재시작
+              docker-compose down || true
+              docker-compose up -d
             else
               echo "실행 가능한 서비스가 없습니다. 배포를 건너뜁니다."
             fi
@@ -699,5 +713,5 @@ jobs:
             echo "컨테이너 상태:"
             docker-compose ps
 
-            # 더 적극적인 이미지 정리 (12시간 이내 사용되지 않은 이미지)
+            # 이미지 정리 (12시간 이내 사용되지 않은 이미지)
             docker image prune -a -f --filter "until=12h"
