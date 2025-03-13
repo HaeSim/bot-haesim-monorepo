@@ -52,12 +52,12 @@ WORKDIR /usr/src/app
 COPY package.json yarn.lock ./
 COPY packages/ ./packages/
 COPY apps/api/package.json ./apps/api/
+COPY apps/api/public ./public
 RUN yarn config set network-timeout 300000 && \
     yarn install --production=true --network-timeout 300000 --frozen-lockfile --network-concurrency 1
 
 COPY --from=development /usr/src/app/dist ./dist
 COPY --from=development /usr/src/app/views ./views
-COPY --from=development /usr/src/app/public ./public
 
 EXPOSE 8080
 
