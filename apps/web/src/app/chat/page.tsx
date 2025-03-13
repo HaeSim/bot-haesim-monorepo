@@ -33,9 +33,14 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, assistantMessage]);
     
     try {
+      // API URL 결정 (브라우저에서는 /api, 서버에서는 API_SERVER_URL)
+      const apiUrl = typeof window !== 'undefined' 
+        ? (process.env.NEXT_PUBLIC_API_URL || '/api')
+        : (process.env.API_SERVER_URL || 'http://api:8080');
+      
       // SSE 연결 설정
       const eventSource = new EventSource(
-        `/api/ollama/chat/stream?prompt=${encodeURIComponent(input)}`
+        `${apiUrl}/ollama/chat/stream?prompt=${encodeURIComponent(input)}`
       );
       
       // 새 메시지 수신 시

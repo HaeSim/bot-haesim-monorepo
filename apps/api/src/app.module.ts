@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule, RequestMethod } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DatabaseModule } from './database/database.module';
@@ -20,4 +20,17 @@ import { OllamaModule } from './ollama/ollama.module';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    // /api 접두사가 포함된 요청을 해당 컨트롤러로 리다이렉트하는 미들웨어
+    consumer
+      .apply((req, res, next) => {
+        // /api 접두사가 있으면 접두사를 제거하고 다음 핸들러로 전달
+        if (req.url.startsWith('/api/')) {
+          req.url = req.url.substring(4); // '/api/' 제거 (4 글자)
+        }
+        next();
+      })
+      .forRoutes({ path: 'api/*', method: RequestMethod.ALL });
+  }
+}

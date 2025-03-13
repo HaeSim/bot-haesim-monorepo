@@ -28,12 +28,9 @@ async function bootstrap() {
   // Handlebars 헬퍼 등록
   registerHandlebarsHelpers();
 
-  // Nginx에서 프록시 설정이 있는 경우는
-  // rewrite 규칙으로 처리하므로 여기서는 별도 처리가 필요하지 않음
-  // 필요한 경우 주석을 해제하여 사용
-  // if (process.env.NODE_ENV === 'production' && process.env.API_PREFIX) {
-  //   app.setGlobalPrefix(process.env.API_PREFIX);
-  // }
+  // Nginx 리버스 프록시 설정에 따라 
+  // /api 접두사는 이미 Nginx에서 처리되므로 NestJS에는 별도 설정이 필요하지 않습니다
+  // app.setGlobalPrefix('api');
 
   // 항상 8080 포트 사용
   const port = 8080;

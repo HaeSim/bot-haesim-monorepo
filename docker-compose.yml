@@ -1,4 +1,4 @@
-version: "3.8"
+version: '3.8'
 
 services:
   api:
@@ -24,7 +24,17 @@ services:
       ollama:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health", "||", "exit", "1"]
+      test:
+        [
+          'CMD',
+          'wget',
+          '-q',
+          '--spider',
+          'http://localhost:8080/health',
+          '||',
+          'exit',
+          '1',
+        ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -53,7 +63,17 @@ services:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000", "||", "exit", "1"]
+      test:
+        [
+          'CMD',
+          'wget',
+          '-q',
+          '--spider',
+          'http://localhost:3000',
+          '||',
+          'exit',
+          '1',
+        ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -64,14 +84,23 @@ services:
       context: ./apps/ollama
       dockerfile: Dockerfile
     ports:
-      - "${OLLAMA_PORT:-11434}:11434"
+      - '${OLLAMA_PORT:-11434}:11434'
     restart: unless-stopped
     volumes:
       - ollama-models:/root/.ollama
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/version", "||", "exit", "1"]
+      test:
+        [
+          'CMD',
+          'curl',
+          '-f',
+          'http://localhost:11434/api/version',
+          '||',
+          'exit',
+          '1',
+        ]
       interval: 10s
       timeout: 5s
       retries: 3
