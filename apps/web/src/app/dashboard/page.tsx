@@ -53,8 +53,13 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
+  const [apiUrl, setApiUrl] = useState<string | null>(null);
 
   useEffect(() => {
+    // API URL 설정 및 확인
+    const publicApiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+    setApiUrl(publicApiUrl);
+
     const loadStats = async () => {
       try {
         setLoading(true);
@@ -331,9 +336,7 @@ export default function Dashboard() {
                 <span>{connected ? '연결됨' : '연결되지 않음'}</span>
               </p>
               <p className='text-sm text-gray-500 mt-1'>
-                URL:{' '}
-                {process.env.NEXT_PUBLIC_API_URL ||
-                  'NEXT_PUBLIC_API_URL가 없음'}
+                URL: {apiUrl || 'NEXT_PUBLIC_API_URL가 없음'}
               </p>
             </div>
             <div>
