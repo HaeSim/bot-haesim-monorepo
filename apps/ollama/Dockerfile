@@ -7,16 +7,18 @@ EXPOSE 11434
 # 모델 데이터 영구 저장을 위한 볼륨 설정
 VOLUME /root/.ollama
 
-# 실행 스크립트 복사
-COPY ollama-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/ollama-entrypoint.sh
+# 환경 변수 설정
+ENV OLLAMA_HOST="0.0.0.0:11434"
+ENV OLLAMA_KEEP_ALIVE="-1"
 
-# 헬스체크 개선 - 더 빠른 간격으로 점검
+# 헬스체크 설정
 HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -f http://localhost:11434/api/version || exit 1
 
-# ENTRYPOINT 재정의
-ENTRYPOINT []
+# 기본 모델 다운로드 스크립트 추가
+COPY download-models.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/download-models.sh
 
-# 컨테이너 실행 시 Ollama 서버 시작
-CMD ["/usr/local/bin/ollama-entrypoint.sh"]
+# 기본 ENTRYPOINT 유지 (ollama serve)
+# 시작 시 모델 다운로드 실행
+CMD /usr/local/bin/download-models.sh && ollama serve
