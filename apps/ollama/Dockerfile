@@ -1,6 +1,9 @@
 # Base image: Optimized Ollama with pre-installed models
 FROM ollama/ollama:latest
 
+# curl 설치 (헬스체크와 스크립트에 필요)
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
 # 실행 포트
 EXPOSE 11434
 
@@ -12,7 +15,7 @@ ENV OLLAMA_HOST="0.0.0.0:11434"
 ENV OLLAMA_KEEP_ALIVE="-1"
 
 # 헬스체크 설정
-HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
+HEALTHCHECK --interval=10s --timeout=5s --start-period=60s --retries=3 \
   CMD curl -f http://localhost:11434/api/version || exit 1
 
 # 기본 모델 다운로드 스크립트 추가
@@ -21,4 +24,4 @@ RUN chmod +x /usr/local/bin/download-models.sh
 
 # 기본 ENTRYPOINT 유지 (ollama serve)
 # 시작 시 모델 다운로드 실행
-CMD /usr/local/bin/download-models.sh && ollama serve
+CMD ollama serve
