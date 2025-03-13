@@ -156,8 +156,15 @@ jobs:
       - name: Detect changed apps
         id: changes
         run: |
-          # Git diff를 사용하여 변경된 파일 확인
-          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD || git diff --name-only HEAD~1 HEAD)
+          # Git diff를 사용하여 변경된 파일 확인 - 안전한 방식으로 이전 커밋 참조
+          if git rev-parse HEAD^ > /dev/null 2>&1; then
+            CHANGED_FILES=$(git diff --name-only HEAD^ HEAD)
+          elif git rev-parse HEAD~1 > /dev/null 2>&1; then
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          else
+            # 히스토리가 없는 경우 빈 문자열 설정
+            CHANGED_FILES=""
+          fi
           echo "Changed files: $CHANGED_FILES"
 
           # 기본적으로 모든 앱이 변경되지 않은 것으로 설정
@@ -250,14 +257,39 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      # Docker 레이어 캐싱
-      - name: Cache Docker layers
+      # Docker 레이어 캐싱 - API용
+      - name: Cache Docker layers for API
         uses: actions/cache@v3
         with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-arm64-buildx-${{ github.sha }}
+          path: /tmp/.buildx-cache-api
+          key: ${{ runner.os }}-arm64-buildx-api-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-arm64-buildx-
+            ${{ runner.os }}-arm64-buildx-api-
+            
+      # Docker 레이어 캐싱 - Web용
+      - name: Cache Docker layers for Web
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache-web
+          key: ${{ runner.os }}-arm64-buildx-web-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-arm64-buildx-web-
+            
+      # Docker 레이어 캐싱 - Ollama용
+      - name: Cache Docker layers for Ollama
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache-ollama
+          key: ${{ runner.os }}-arm64-buildx-ollama-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-arm64-buildx-ollama-
+            
+      # 캐시 디렉토리 생성 (존재하지 않을 경우)
+      - name: Create cache directories
+        run: |
+          mkdir -p /tmp/.buildx-cache-api
+          mkdir -p /tmp/.buildx-cache-web
+          mkdir -p /tmp/.buildx-cache-ollama
 
       # API 이미지 빌드 및 푸시 (변경 감지 시에만)
       - name: Build and push API Docker image
@@ -361,11 +393,29 @@ jobs:
       # 캐시 업데이트
       - name: Move cache
         run: |
-          rm -rf /tmp/.buildx-cache-api /tmp/.buildx-cache-web /tmp/.buildx-cache-ollama
-          mkdir -p /tmp/.buildx-cache-api /tmp/.buildx-cache-web /tmp/.buildx-cache-ollama
-          [ -d "/tmp/.buildx-cache-api-new" ] && cp -R /tmp/.buildx-cache-api-new/* /tmp/.buildx-cache-api/ || true
-          [ -d "/tmp/.buildx-cache-web-new" ] && cp -R /tmp/.buildx-cache-web-new/* /tmp/.buildx-cache-web/ || true
-          [ -d "/tmp/.buildx-cache-ollama-new" ] && cp -R /tmp/.buildx-cache-ollama-new/* /tmp/.buildx-cache-ollama/ || true
+          # API 캐시 이동
+          if [ -d "/tmp/.buildx-cache-api-new" ]; then
+            rm -rf /tmp/.buildx-cache-api
+            mkdir -p /tmp/.buildx-cache-api
+            cp -R /tmp/.buildx-cache-api-new/* /tmp/.buildx-cache-api/ || true
+            echo "API 빌드 캐시 업데이트 완료"
+          fi
+          
+          # Web 캐시 이동
+          if [ -d "/tmp/.buildx-cache-web-new" ]; then
+            rm -rf /tmp/.buildx-cache-web
+            mkdir -p /tmp/.buildx-cache-web
+            cp -R /tmp/.buildx-cache-web-new/* /tmp/.buildx-cache-web/ || true
+            echo "Web 빌드 캐시 업데이트 완료"
+          fi
+          
+          # Ollama 캐시 이동
+          if [ -d "/tmp/.buildx-cache-ollama-new" ]; then
+            rm -rf /tmp/.buildx-cache-ollama
+            mkdir -p /tmp/.buildx-cache-ollama
+            cp -R /tmp/.buildx-cache-ollama-new/* /tmp/.buildx-cache-ollama/ || true
+            echo "Ollama 빌드 캐시 업데이트 완료"
+          fi
 
       # 이미지 패키지를 공개로 설정
       - name: Make packages public
