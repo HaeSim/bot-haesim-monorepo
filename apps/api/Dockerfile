@@ -36,7 +36,7 @@ COPY . .
 ENV PATH="./node_modules/.bin:$PATH"
 RUN NODE_OPTIONS="--max-old-space-size=4096" yarn workspace api build
 
-# Make sure dist directory exists and create views directory
+# Make sure dist directory exists
 RUN ls -la /usr/src/app/dist || echo "dist directory not found"
 
 # Production dependencies stage - smaller footprint
