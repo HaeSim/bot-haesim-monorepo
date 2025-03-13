@@ -37,8 +37,7 @@ ENV PATH="./node_modules/.bin:$PATH"
 RUN NODE_OPTIONS="--max-old-space-size=4096" yarn workspace api build
 
 # Make sure dist directory exists and create views directory
-RUN ls -la /usr/src/app/dist || echo "dist directory not found" && \
-    mkdir -p /usr/src/app/views
+RUN ls -la /usr/src/app/dist || echo "dist directory not found"
 
 # Production dependencies stage - smaller footprint
 FROM base AS prod-deps
@@ -59,8 +58,6 @@ WORKDIR /usr/src/app
 # Copy only what's needed for production
 COPY --from=prod-deps /usr/src/app/node_modules ./node_modules
 COPY --from=development /usr/src/app/apps/api/dist ./dist
-COPY --from=development /usr/src/app/apps/api/views ./views
-COPY --from=development /usr/src/app/apps/api/public ./public
 
 EXPOSE 8080
 

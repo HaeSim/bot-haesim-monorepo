@@ -14,30 +14,30 @@ graph TD
         IPTABLES["방화벽 (iptables)"]
         CLOUDINIT["Cloud-Init 자동화"]
     end
-    
+
     subgraph "Docker 컨테이너"
         WEB["Next.js 애플리케이션\n(3000 포트)"]
         API["NestJS API\n(8080 포트)"]
         OLLAMA["Ollama LLM\n(내부 네트워크 전용)"]
         DB["데이터베이스\n(Oracle)"]
     end
-    
+
     subgraph "외부 서비스"
         WEBEX["Cisco Webex API"]
         GH["GitHub Actions\n(CI/CD)"]
     end
-    
+
     CLIENT[("사용자 브라우저")] -->|HTTPS| NGINX
     WEBEX <-->|Webhook 이벤트| API
     GH -->|자동 배포| CLOUD
     CLOUDINIT -->|초기 설정| CLOUD
-    
+
     NGINX --> WEB
     NGINX --> API
     API <--> DB
     API <--> OLLAMA
     WEB --> API
-    
+
     IPTABLES -->|포트 보안| NGINX
 ```
 
@@ -54,26 +54,26 @@ flowchart TD
         PORT2["8080 포트\n(NestJS API)"]
         DOCKER_NET["Docker 내부 네트워크"]
     end
-    
+
     INTERNET["인터넷"] -->|HTTP/HTTPS| NGINX
     NGINX --> PORT1
     NGINX --> PORT2
     PORT2 --> DOCKER_NET
-    
+
     FIREWALL -->|허용: 80, 443, 3000| NGINX
     FIREWALL -->|Docker 내부 통신| DOCKER_NET
 ```
 
 ### URL 경로 및 프록시 설정
 
-| 경로 | 서비스 | 설명 |
-|------|--------|------|
-| `/` | Next.js | 웹 애플리케이션 기본 경로 |
-| `/api/v1/*` | NestJS | API 요청 (리라이팅 적용) |
-| `/webhook` | NestJS | Webex Webhook 수신 엔드포인트 |
-| `/monitor` | NestJS | 모니터링 대시보드 |
-| `/health` | NestJS | 헬스체크 엔드포인트 |
-| `/nginx-health` | Nginx | Nginx 헬스체크 |
+| 경로            | 서비스  | 설명                          |
+| --------------- | ------- | ----------------------------- |
+| `/`             | Next.js | 웹 애플리케이션 기본 경로     |
+| `/api/v1/*`     | NestJS  | API 요청 (리라이팅 적용)      |
+| `/webhook`      | NestJS  | Webex Webhook 수신 엔드포인트 |
+| `/monitor`      | NestJS  | 모니터링 대시보드             |
+| `/health`       | NestJS  | 헬스체크 엔드포인트           |
+| `/nginx-health` | Nginx   | Nginx 헬스체크                |
 
 ## 📦 프로젝트 구조
 
@@ -83,30 +83,30 @@ flowchart TD
 graph TD
     subgraph "모노레포 구조"
         ROOT["bot-haesim-monorepo"]
-        
+
         subgraph "apps"
             API["api (NestJS)"]
             WEB["web (Next.js)"]
             OLLAMA["ollama (LLM)"]
         end
-        
+
         subgraph "packages"
             CONFIG["typescript-config"]
             ESLINT["eslint-config"]
             UI["ui (공유 컴포넌트)"]
         end
-        
+
         ROOT --> apps
         ROOT --> packages
-        
+
         apps --> API
         apps --> WEB
         apps --> OLLAMA
-        
+
         packages --> CONFIG
         packages --> ESLINT
         packages --> UI
-        
+
         UI -.->|사용| WEB
         CONFIG -.->|사용| API
         CONFIG -.->|사용| WEB
@@ -128,8 +128,6 @@ bot-haesim-monorepo/
 │   │   │   ├── messages/  # 메시지 처리 모듈
 │   │   │   ├── ollama/    # Ollama LLM 통합
 │   │   │   └── webex/     # Webex Bot 통합
-│   │   ├── views/         # 서버사이드 렌더링 템플릿
-│   │   └── public/        # 정적 파일
 │   ├── web/               # Next.js 프론트엔드
 │   │   └── src/
 │   │       └── app/       # Next.js 페이지 및 컴포넌트
@@ -137,7 +135,7 @@ bot-haesim-monorepo/
 │       └── model/         # 로컬 LLM 모델 저장소
 ├── packages/
 │   ├── eslint-config/     # 공유 ESLint 설정
-│   ├── typescript-config/ # 공유 TypeScript 설정 
+│   ├── typescript-config/ # 공유 TypeScript 설정
 │   └── ui/                # 공유 UI 컴포넌트
 └── docker-compose.yml     # 전체 서비스 컨테이너 설정
 ```
@@ -149,21 +147,25 @@ bot-haesim-monorepo/
 NestJS 백엔드는 다음과 같은 핵심 기능을 제공합니다:
 
 - **Webex 봇 통합**
+
   - Webex API를 통한 메시지 송수신
   - 봇 명령어 처리 및 응답 생성
   - 사용자 인증 및 권한 관리
 
 - **Ollama LLM 서비스 연동**
+
   - 로컬 호스팅된 LLM 모델 활용
   - 텍스트 생성 및 대화 기능
   - 스트리밍 응답 지원
 
 - **Webhook 처리**
+
   - Webex Webhook 이벤트 수신 및 처리
   - 이벤트 로깅 및 분석
   - 외부 시스템 연동
 
 - **모니터링 및 관리**
+
   - 봇 활동 모니터링 대시보드
   - 실시간 로그 및 상태 확인
   - 성능 지표 수집
@@ -178,11 +180,13 @@ NestJS 백엔드는 다음과 같은 핵심 기능을 제공합니다:
 Next.js 프론트엔드는 다음과 같은 기능을 제공합니다:
 
 - **관리자 대시보드**
+
   - 봇 상태 모니터링 및 관리
   - 사용 통계 및 분석 데이터 시각화
   - 시스템 설정 관리
 
 - **Ollama 채팅 인터페이스**
+
   - 실시간 대화형 UI
   - 스트리밍 응답 표시
   - 대화 컨텍스트 관리
@@ -197,11 +201,13 @@ Next.js 프론트엔드는 다음과 같은 기능을 제공합니다:
 Ollama 컨테이너는 다음과 같은 기능을 제공합니다:
 
 - **로컬 LLM 모델 호스팅**
+
   - 로컬 환경에서 모델 실행
   - 다양한 모델 지원
   - 추론 최적화
 
 - **텍스트 생성 및 채팅**
+
   - 텍스트 완성 및 생성
   - 채팅 맥락 처리
   - 프롬프트 엔지니어링
@@ -252,22 +258,26 @@ graph LR
 ## 🔧 기술 스택
 
 ### 백엔드
+
 - **NestJS**: 확장 가능한 서버 애플리케이션 프레임워크
 - **TypeORM**: 객체 관계 매핑 도구
 - **Webex Bot Framework**: Webex 통합 봇 개발
 - **Handlebars**: 서버사이드 템플릿 엔진
 
 ### 프론트엔드
+
 - **Next.js 15**: React 기반 프레임워크
 - **React 19**: UI 컴포넌트 라이브러리
 - **TailwindCSS**: 유틸리티 기반 CSS 프레임워크
 - **TypeScript**: 정적 타입 지원
 
 ### LLM 및 AI
+
 - **Ollama**: 로컬 LLM 모델 서비스
 - **텍스트 생성 모델**: 대화형 응답 생성
 
 ### 인프라 및 배포
+
 - **클라우드 가상 서버**: 클라우드 인프라
 - **Cloud-Init**: 인스턴스 자동 초기화
 - **Nginx**: 웹 서버 및 리버스 프록시
@@ -275,6 +285,7 @@ graph LR
 - **Docker Compose**: 다중 컨테이너 관리
 
 ### CI/CD 및 개발
+
 - **GitHub Actions**: 지속적 통합/배포
 - **GitHub Container Registry**: 컨테이너 이미지 저장소
 - **Turborepo**: 모노레포 빌드 시스템
@@ -284,6 +295,7 @@ graph LR
 ## 🛠️ 개발 환경 설정
 
 ### 필수 사전 요구사항
+
 - Node.js 18.x 이상
 - Yarn 패키지 매니저
 - Docker 및 Docker Compose
@@ -339,7 +351,7 @@ graph TD
         COMPOSE["Docker Compose"]
         CONTAINERS["Docker 컨테이너"]
     end
-    
+
     GH -->|코드 변경| GHA
     GHA -->|이미지 빌드 및 푸시| REGISTRY
     GHA -->|배포 명령| SERVER
@@ -420,16 +432,16 @@ docker-compose logs -f
 
 주요 환경 변수 목록:
 
-| 변수명 | 설명 | 예시 |
-|--------|------|------|
-| `WEBEX_ACCESS_TOKEN` | Webex Bot 접근 토큰 | `Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MA` |
-| `WEBEX_WEBHOOK_URL` | Webhook 엔드포인트 URL | `https://your-domain.com/webhook` |
-| `DATABASE_URL` | 데이터베이스 연결 문자열 | `oracle://username:password@host:port/service` |
-| `OLLAMA_API_URL` | Ollama API 접근 URL | `http://ollama:11434` |
-| `API_PREFIX` | API 경로 접두사 | `/api/v1` |
-| `NEXT_PUBLIC_API_URL` | 프론트엔드 API 요청 경로 | `/api/v1` |
-| `DOMAIN_NAME` | 서비스 도메인 이름 | `bot.example.com` |
-| `LOG_LEVEL` | 로깅 레벨 설정 | `info` |
+| 변수명                | 설명                     | 예시                                             |
+| --------------------- | ------------------------ | ------------------------------------------------ |
+| `WEBEX_ACCESS_TOKEN`  | Webex Bot 접근 토큰      | `Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MA` |
+| `WEBEX_WEBHOOK_URL`   | Webhook 엔드포인트 URL   | `https://your-domain.com/webhook`                |
+| `DATABASE_URL`        | 데이터베이스 연결 문자열 | `oracle://username:password@host:port/service`   |
+| `OLLAMA_API_URL`      | Ollama API 접근 URL      | `http://ollama:11434`                            |
+| `API_PREFIX`          | API 경로 접두사          | `/api/v1`                                        |
+| `NEXT_PUBLIC_API_URL` | 프론트엔드 API 요청 경로 | `/api/v1`                                        |
+| `DOMAIN_NAME`         | 서비스 도메인 이름       | `bot.example.com`                                |
+| `LOG_LEVEL`           | 로깅 레벨 설정           | `info`                                           |
 
 ### Webex Bot 설정
 

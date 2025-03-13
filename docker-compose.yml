@@ -9,8 +9,6 @@ services:
     volumes:
       # 개발 환경에서만 볼륨 마운트 (NODE_ENV=development 일 때)
       - ${NODE_ENV:-development} == development: ./apps/api/src:/usr/src/app/apps/api/src
-      - ${NODE_ENV:-development} == development: ./apps/api/views:/usr/src/app/apps/api/views
-      - ${NODE_ENV:-development} == development: ./apps/api/public:/usr/src/app/apps/api/public
     command: ${NODE_ENV:-development} == development && yarn workspace api dev || node dist/main
     ports:
       - '${API_PORT:-8080}:8080'
