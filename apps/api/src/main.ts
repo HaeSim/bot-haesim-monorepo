@@ -5,8 +5,6 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as bodyParser from 'body-parser';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { join } from 'path';
-import { registerHandlebarsHelpers } from './common/utils/handlebars-helpers';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -17,16 +15,6 @@ async function bootstrap() {
   // JSON 요청 처리를 위한 bodyParser 설정
   app.use(bodyParser.json({ limit: '10mb' }));
   app.use(bodyParser.urlencoded({ extended: true }));
-
-  // 정적 파일 제공 설정
-  app.useStaticAssets(join(__dirname, '..', 'public'));
-
-  // 뷰 엔진 설정
-  app.setBaseViewsDir(join(__dirname, '..', 'views'));
-  app.setViewEngine('hbs');
-
-  // Handlebars 헬퍼 등록
-  registerHandlebarsHelpers();
 
   // API 프리픽스 설정
   // Nginx 리버스 프록시 설정에 따라 /api/v1 형태로 요청이 들어옴
