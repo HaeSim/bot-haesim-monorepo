@@ -1,7 +1,10 @@
 import axios from 'axios';
 
 // API URL 설정
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+// 클라이언트 사이드에서는 /api를, 서버 사이드에서는 직접 API 서비스 URL을 사용
+const API_URL = typeof window === 'undefined' 
+  ? (process.env.API_SERVER_URL || 'http://api:8080') // 서버 사이드
+  : (process.env.NEXT_PUBLIC_API_URL || '/api');      // 클라이언트 사이드
 
 // axios 인스턴스 생성
 const api = axios.create({

@@ -11,6 +11,9 @@ import { registerHandlebarsHelpers } from './common/utils/handlebars-helpers';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
+  // CORS 설정
+  app.enableCors();
+
   // JSON 요청 처리를 위한 bodyParser 설정
   app.use(bodyParser.json({ limit: '10mb' }));
   app.use(bodyParser.urlencoded({ extended: true }));
@@ -25,8 +28,15 @@ async function bootstrap() {
   // Handlebars 헬퍼 등록
   registerHandlebarsHelpers();
 
-  // 환경 변수에서 포트 가져오기, 없으면 8080 사용
-  const port = process.env.PORT || 8080;
+  // Nginx에서 프록시 설정이 있는 경우는
+  // rewrite 규칙으로 처리하므로 여기서는 별도 처리가 필요하지 않음
+  // 필요한 경우 주석을 해제하여 사용
+  // if (process.env.NODE_ENV === 'production' && process.env.API_PREFIX) {
+  //   app.setGlobalPrefix(process.env.API_PREFIX);
+  // }
+
+  // 항상 8080 포트 사용
+  const port = 8080;
 
   await app.listen(port);
   console.log(`애플리케이션이 포트 ${port}에서 실행 중입니다.`);

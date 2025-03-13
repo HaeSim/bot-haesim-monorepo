@@ -6,6 +6,7 @@ import { ConfigModule } from './config/config.module';
 import { MessagesModule } from './messages/messages.module';
 import { WebexModule } from './webex/webex.module';
 import { HealthModule } from './health/health.module';
+import { OllamaModule } from './ollama/ollama.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { HealthModule } from './health/health.module';
     MessagesModule,
     WebexModule,
     HealthModule,
+    OllamaModule,
   ],
   controllers: [AppController],
   providers: [AppService],

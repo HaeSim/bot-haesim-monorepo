@@ -359,10 +359,10 @@ jobs:
               api:
                 image: ghcr.io/${OWNER_LOWERCASE}/${REPO_LOWERCASE}-api:latest
                 ports:
-                  - '3000:3000'
+                  - '8080:8080'
                 restart: unless-stopped
                 environment:
-                  - PORT=3000
+                  - PORT=8080
                   - BOT_ACCESS_TOKEN=${BOT_ACCESS_TOKEN}
                   - DOMAIN_NAME=${DOMAIN_NAME}
                   - BOT_NAME=${BOT_NAME}
@@ -371,8 +371,16 @@ jobs:
                   - DB_USERNAME=ADMIN
                   - DB_PASSWORD=${DB_PASSWORD}
                   - NODE_ENV=production
+                  - API_PREFIX=
+                  - OLLAMA_API_URL=http://ollama:11434
                 networks:
                   - app-network
+                healthcheck:
+                  test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health", "||", "exit", "1"]
+                  interval: 30s
+                  timeout: 10s
+                  retries: 3
+                  start_period: 5s
             EOF
             else
               echo "API 서비스가 존재하지 않아 docker-compose.yml에서 제외됩니다."
@@ -385,13 +393,21 @@ jobs:
               web:
                 image: ghcr.io/${OWNER_LOWERCASE}/${REPO_LOWERCASE}-web:latest
                 ports:
-                  - '3001:3000'
+                  - '3000:3000'
                 restart: unless-stopped
                 environment:
                   - NODE_ENV=production
-                  - NEXT_PUBLIC_API_URL=http://api:3000
+                  - NEXT_PUBLIC_API_URL=/api
+                  - API_SERVER_URL=http://api:8080
+                  - OLLAMA_API_URL=http://ollama:11434
                 networks:
                   - app-network
+                healthcheck:
+                  test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000", "||", "exit", "1"]
+                  interval: 30s
+                  timeout: 10s
+                  retries: 3
+                  start_period: 5s
             EOF
               
               # API 서비스가 존재하는 경우에만 의존성 추가
@@ -416,6 +432,12 @@ jobs:
                 restart: unless-stopped
                 networks:
                   - app-network
+                healthcheck:
+                  test: ["CMD", "curl", "-f", "http://localhost:11434/api/version", "||", "exit", "1"]
+                  interval: 30s
+                  timeout: 10s
+                  retries: 3
+                  start_period: 10s
             EOF
             else
               echo "Ollama 서비스가 존재하지 않아 docker-compose.yml에서 제외됩니다."
