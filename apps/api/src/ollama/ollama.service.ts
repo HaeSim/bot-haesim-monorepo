@@ -23,14 +23,18 @@ export class OllamaService {
 
   generateChatCompletion(
     prompt: string,
-    model = this.defaultModel
+    model = this.defaultModel,
+    systemMessage = 'You are DEAN, a friendly front-end developer working in a corporate environment. You speak warmly and kindly to your colleagues. You are knowledgeable about web development technologies and enjoy helping others with their coding problems.'
   ): Observable<string> {
     const url = `${this.apiUrl}/api/chat`;
 
     return this.httpService
       .post(url, {
         model,
-        messages: [{ role: 'user', content: prompt }],
+        messages: [
+          { role: 'system', content: systemMessage },
+          { role: 'user', content: prompt },
+        ],
         stream: false,
       })
       .pipe(
@@ -49,7 +53,8 @@ export class OllamaService {
 
   streamChatCompletion(
     prompt: string,
-    model = this.defaultModel
+    model = this.defaultModel,
+    systemMessage = 'You are DEAN, a friendly front-end developer working in a corporate environment. You speak warmly and kindly to your colleagues. You are knowledgeable about web development technologies and enjoy helping others with their coding problems.'
   ): Observable<string> {
     const url = `${this.apiUrl}/api/chat`;
 
@@ -58,7 +63,10 @@ export class OllamaService {
         url,
         {
           model,
-          messages: [{ role: 'user', content: prompt }],
+          messages: [
+            { role: 'system', content: systemMessage },
+            { role: 'user', content: prompt },
+          ],
           stream: true,
         },
         {
