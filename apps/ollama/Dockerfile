@@ -23,4 +23,4 @@ COPY download-models.sh ollama-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/download-models.sh /usr/local/bin/ollama-entrypoint.sh
 
 # ollama-entrypoint.sh를 ENTRYPOINT로 설정
-ENTRYPOINT ["/usr/local/bin/ollama-entrypoint.sh"]
+ENTRYPOINT ["/bin/sh", "-c", "/usr/local/bin/ollama-entrypoint.sh"]
