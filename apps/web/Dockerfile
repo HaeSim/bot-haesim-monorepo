@@ -23,7 +23,7 @@ FROM node:23.7.0-alpine AS build
 WORKDIR /usr/src/app
 
 # 환경 변수 ARG로 정의하여 빌드 시 전달
-ARG NEXT_PUBLIC_API_URL=/api
+ARG NEXT_PUBLIC_API_URL=/api/v1
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
 # Copy workspace files for monorepo
@@ -48,7 +48,7 @@ WORKDIR /usr/src/app
 
 ENV NODE_ENV=production
 # 빌드 시점의 환경 변수를 런타임까지 전달
-ARG NEXT_PUBLIC_API_URL=/api
+ARG NEXT_PUBLIC_API_URL=/api/v1
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
 # Copy workspace files for monorepo
