@@ -10,7 +10,7 @@ import { ConfigService } from '../config/config.service';
 export class OllamaService {
   private readonly logger = new Logger(OllamaService.name);
   private readonly apiUrl: string;
-  private readonly defaultModel = 'kanana-nano-abliterated'; // 기본 모델
+  private readonly defaultModel = 'huihui_ai/kanana-nano-abliterated'; // 기본 모델
 
   constructor(
     private readonly httpService: HttpService,
