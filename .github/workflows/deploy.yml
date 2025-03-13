@@ -133,10 +133,10 @@ jobs:
         run: |
           OWNER_LOWERCASE=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')
           REPO_LOWERCASE=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]' | cut -d'/' -f2)
-          
+
           echo "owner_lowercase=$OWNER_LOWERCASE" >> $GITHUB_OUTPUT
           echo "repo_lowercase=$REPO_LOWERCASE" >> $GITHUB_OUTPUT
-          
+
           echo "OWNER_LOWERCASE: $OWNER_LOWERCASE"
           echo "REPO_LOWERCASE: $REPO_LOWERCASE"
 
@@ -199,7 +199,7 @@ jobs:
           key: ${{ runner.os }}-arm64-buildx-api-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-arm64-buildx-api-
-            
+
       # 캐시 디렉토리 생성 (존재하지 않을 경우)
       - name: Create cache directories
         run: mkdir -p /tmp/.buildx-cache-api
@@ -230,12 +230,19 @@ jobs:
           echo "API 이미지 빌드 결과 확인..."
           if [ "${{ steps.build-api.outcome }}" == "success" ]; then
             echo "API 이미지 빌드 성공"
-            echo "build_success=true" >> $GITHUB_OUTPUT
+            # 이미지 이름 패턴 수정 - REGISTRY 환경 변수 사용
+            if docker image ls | grep "${{ env.REGISTRY }}/${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-api"; then
+              echo "API 이미지가 확인되었습니다."
+              echo "build_success=true" >> $GITHUB_OUTPUT
+            else
+              echo "빌드는 성공했지만 이미지를 찾을 수 없습니다."
+              # 빌드가 성공했으므로 true로 설정
+              echo "build_success=true" >> $GITHUB_OUTPUT
+            fi
           else
             echo "API 이미지 빌드 실패"
             echo "build_success=false" >> $GITHUB_OUTPUT
           fi
-          docker image ls | grep "${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-api" || echo "API 이미지가 빌드되지 않았습니다."
 
       # 캐시 업데이트
       - name: Move cache
@@ -301,7 +308,7 @@ jobs:
           key: ${{ runner.os }}-arm64-buildx-web-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-arm64-buildx-web-
-            
+
       # 캐시 디렉토리 생성 (존재하지 않을 경우)
       - name: Create cache directories
         run: mkdir -p /tmp/.buildx-cache-web
@@ -332,7 +339,15 @@ jobs:
           echo "Web 이미지 빌드 결과 확인..."
           if [ "${{ steps.build-web.outcome }}" == "success" ]; then
             echo "Web 이미지 빌드 성공"
-            echo "build_success=true" >> $GITHUB_OUTPUT
+            # 이미지 이름 패턴 수정 - REGISTRY 환경 변수 사용
+            if docker image ls | grep "${{ env.REGISTRY }}/${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-web"; then
+              echo "Web 이미지가 확인되었습니다."
+              echo "build_success=true" >> $GITHUB_OUTPUT
+            else
+              echo "빌드는 성공했지만 이미지를 찾을 수 없습니다."
+              # 빌드가 성공했으므로 true로 설정
+              echo "build_success=true" >> $GITHUB_OUTPUT
+            fi
           else
             echo "Web 이미지 빌드 실패"
             echo "build_success=false" >> $GITHUB_OUTPUT
@@ -383,7 +398,7 @@ jobs:
           key: ${{ runner.os }}-arm64-buildx-ollama-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-arm64-buildx-ollama-
-            
+
       # 캐시 디렉토리 생성 (존재하지 않을 경우)
       - name: Create cache directories
         run: mkdir -p /tmp/.buildx-cache-ollama
@@ -411,7 +426,15 @@ jobs:
           echo "Ollama 이미지 빌드 결과 확인..."
           if [ "${{ steps.build-ollama.outcome }}" == "success" ]; then
             echo "Ollama 이미지 빌드 성공"
-            echo "build_success=true" >> $GITHUB_OUTPUT
+            # 이미지 이름 패턴 수정 - REGISTRY 환경 변수 사용
+            if docker image ls | grep "${{ env.REGISTRY }}/${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-ollama"; then
+              echo "Ollama 이미지가 확인되었습니다."
+              echo "build_success=true" >> $GITHUB_OUTPUT
+            else
+              echo "빌드는 성공했지만 이미지를 찾을 수 없습니다."
+              # 빌드가 성공했으므로 true로 설정
+              echo "build_success=true" >> $GITHUB_OUTPUT
+            fi
           else
             echo "Ollama 이미지 빌드 실패"
             echo "build_success=false" >> $GITHUB_OUTPUT

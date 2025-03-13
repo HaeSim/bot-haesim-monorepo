@@ -4,10 +4,8 @@ FROM ollama/ollama:latest
 # 실행 포트
 EXPOSE 11434
 
-# 자주 사용하는 모델 사전 설치 - 빌드 시간은 증가하지만 배포 및 실행 시간 대폭 감소
-RUN ollama pull llama2 && \
-    ollama pull mistral && \
-    ollama pull llava:latest
+# 필요한 모델만 사전 설치
+RUN ollama pull huihui_ai/kanana-nano-abliterated
 
 # 모델 데이터 영구 저장을 위한 볼륨 설정
 VOLUME /root/.ollama

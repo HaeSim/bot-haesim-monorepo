@@ -5,7 +5,7 @@ set -e
 ollama serve &
 OLLAMA_PID=$!
 
-# 서버가 완전히 시작될 때까지 대기 (병렬 처리를 통한 시간 단축)
+# 서버가 완전히 시작될 때까지 대기
 echo "Ollama 서버 시작 중..."
 start_time=$(date +%s)
 until curl -s http://localhost:11434/api/version > /dev/null; do
@@ -20,32 +20,6 @@ until curl -s http://localhost:11434/api/version > /dev/null; do
   sleep 2
 done
 echo "Ollama 서버 준비 완료! (시작 시간: $(($(date +%s) - start_time))초)"
-
-# 환경에서 요청한 추가 모델 다운로드 (기본 모델은 이미지에 포함됨)
-if [ -n "$OLLAMA_MODELS" ]; then
-  echo "추가 모델 다운로드 확인 중..."
-  IFS=',' read -ra MODELS <<< "$OLLAMA_MODELS"
-  
-  # 병렬 모델 다운로드 - 최대 2개 모델 동시 다운로드
-  for model in "${MODELS[@]}"; do
-    # 이미 존재하는 모델은 다시 다운로드하지 않음
-    if ! ollama list | grep -q "$model"; then
-      echo "모델 다운로드 중: $model"
-      ollama pull "$model" &
-      # 최대 2개 모델까지 병렬 다운로드
-      background_count=$(jobs -p | wc -l)
-      if [ $background_count -ge 2 ]; then
-        wait -n  # 작업 하나가 완료될 때까지 대기
-      fi
-    else
-      echo "모델 $model 이미 존재함, 다운로드 건너뜀"
-    fi
-  done
-  
-  # 모든 다운로드 완료 대기
-  wait
-  echo "모든 요청된 모델 준비 완료!"
-fi
 
 # 기본 모델 확인 (huihui_ai/kanana-nano-abliterated)
 if ! ollama list | grep -q "huihui_ai/kanana-nano-abliterated"; then
