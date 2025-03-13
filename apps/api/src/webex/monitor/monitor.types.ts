@@ -7,6 +7,9 @@ export interface BotStatus {
   totalWebhookLogs: number;
   totalMessages: number;
   startTime: Date;
+  avatar?: string;
+  displayName?: string;
+  personId?: string;
 }
 
 export interface Room {

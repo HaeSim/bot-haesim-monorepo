@@ -18,10 +18,9 @@ ENV OLLAMA_KEEP_ALIVE="-1"
 HEALTHCHECK --interval=10s --timeout=5s --start-period=60s --retries=3 \
   CMD curl -f http://localhost:11434/api/version || exit 1
 
-# 기본 모델 다운로드 스크립트 추가
-COPY download-models.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/download-models.sh
+# 모든 스크립트 추가
+COPY download-models.sh ollama-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/download-models.sh /usr/local/bin/ollama-entrypoint.sh
 
-# 기본 ENTRYPOINT 유지 (ollama serve)
-# 시작 시 모델 다운로드 실행
-CMD ollama serve
+# ollama-entrypoint.sh를 ENTRYPOINT로 설정
+ENTRYPOINT ["/usr/local/bin/ollama-entrypoint.sh"]

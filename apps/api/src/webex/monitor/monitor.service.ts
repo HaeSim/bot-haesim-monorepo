@@ -45,6 +45,30 @@ export class MonitorService {
       // 현재 접속 중인 룸 정보 가져오기
       const activeRooms = await this.getActiveRooms();
 
+      // 봇 프로필 정보 가져오기
+      let botAvatar = null;
+      let botDisplayName = null;
+      let botId = null;
+      
+      try {
+        const botInfo = await this.botService.getBotInfo();
+        
+        // 봇 ID를 기반으로 사람 세부 정보 가져오기
+        if (botInfo && botInfo.id) {
+          botId = botInfo.id;
+          const personDetails = await this.botService.getPersonDetails(botInfo.id);
+          
+          if (personDetails) {
+            botAvatar = personDetails.avatar || null;
+            botDisplayName = personDetails.displayName || botInfo.displayName;
+          } else {
+            botDisplayName = botInfo.displayName;
+          }
+        }
+      } catch (err) {
+        this.logger.warn('봇 프로필 정보를 가져오는 데 실패했습니다.');
+      }
+
       // 봇 상태 정보
       const botStatus: BotStatus = {
         isOnline: true, // 실제 상태는 봇 서비스에서 가져오는 것이 좋습니다
@@ -53,6 +77,9 @@ export class MonitorService {
         totalWebhookLogs: recentWebhookLogs.length,
         totalMessages: recentMessages.length,
         startTime: this.startTime,
+        avatar: botAvatar,
+        displayName: botDisplayName,
+        personId: botId
       };
 
       return {

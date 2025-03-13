@@ -387,9 +387,28 @@ export class BotService implements OnModuleInit {
   }
 
   /**
-   * 봇이 참여하고 있는 모든 룸 목록을 가져옵니다.
-   * @returns 룸 목록
+   * 현재 봇의 정보를 가져옵니다.
+   * @returns 봇의 기본 정보
    */
+  async getBotInfo(): Promise<BotInfo> {
+    try {
+      this.logger.debug('봇 정보 가져오기 시작');
+      
+      // 프레임워크를 통해 봇 정보 가져오기
+      const botInfo = await this.framework.getBotInfo();
+      this.logger.debug(`봇 정보 응답 받음: ${JSON.stringify(botInfo)}`);
+      
+      return botInfo;
+    } catch (err) {
+      const error = err as ErrorWithMessage;
+      this.logger.error(`봇 정보 가져오기 실패: ${error.message}`);
+      this.logger.debug(
+        `봇 정보 오류 스택 트레이스: ${error.stack || '스택 정보 없음'}`
+      );
+      throw new Error(`봇 정보 가져오기 실패: ${error.message}`);
+    }
+  }
+
   async listRooms(): Promise<
     Array<{
       id: string;

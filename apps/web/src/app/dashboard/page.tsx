@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { fetchMonitoringStats } from '../api';
 
@@ -11,6 +12,9 @@ interface BotStatus {
   totalWebhookLogs: number;
   totalMessages: number;
   startTime: Date;
+  avatar?: string;
+  displayName?: string;
+  personId?: string;
 }
 
 interface Room {
@@ -160,32 +164,65 @@ export default function Dashboard() {
             <div className='grid grid-cols-1 md:grid-cols-2 gap-8 mb-8'>
               <div className='bg-white dark:bg-slate-800 p-6 rounded-lg shadow-lg'>
                 <h2 className='text-2xl font-semibold mb-4'>봇 상태</h2>
-                <div className='flex items-center mb-4'>
-                  <div
-                    className={`w-4 h-4 rounded-full ${stats.botStatus.isOnline ? 'bg-green-500' : 'bg-red-500'} mr-2`}
-                  ></div>
-                  <p>{stats.botStatus.isOnline ? '온라인' : '오프라인'}</p>
+                <div className='flex items-start mb-6'>
+                  <div className='mr-4'>
+                    {stats.botStatus.avatar ? (
+                      <div className="w-16 h-16 rounded-full border-2 border-blue-500 relative overflow-hidden">
+                        <Image 
+                          src={stats.botStatus.avatar}
+                          alt="Bot Avatar" 
+                          className="object-cover"
+                          width={64}
+                          height={64}
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-16 h-16 rounded-full bg-blue-500 flex items-center justify-center text-white text-2xl font-bold">
+                        {stats.botStatus.displayName ? stats.botStatus.displayName.charAt(0) : 'B'}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <h3 className='text-lg font-medium mb-1'>{stats.botStatus.displayName || 'Bot Haesim'}</h3>
+                    <div className='flex items-center'>
+                      <div
+                        className={`w-3 h-3 rounded-full ${stats.botStatus.isOnline ? 'bg-green-500' : 'bg-red-500'} mr-2`}
+                      ></div>
+                      <p className='text-sm'>{stats.botStatus.isOnline ? '온라인' : '오프라인'}</p>
+                    </div>
+                  </div>
                 </div>
-                <div className='space-y-2 text-sm'>
-                  <p>
-                    <span className='font-medium'>시작 시간:</span>{' '}
-                    {formatDate(stats.botStatus.startTime)}
-                  </p>
-                  <p>
-                    <span className='font-medium'>마지막 활동:</span>{' '}
-                    {stats.botStatus.lastActivity
-                      ? formatDate(stats.botStatus.lastActivity)
-                      : '없음'}
-                  </p>
-                  <p>
-                    <span className='font-medium'>총 메시지:</span>{' '}
-                    {stats.botStatus.totalMessages}
-                  </p>
-                  <p>
-                    <span className='font-medium'>총 웹훅 로그:</span>{' '}
-                    {stats.botStatus.totalWebhookLogs}
-                  </p>
+                <div className='border-t dark:border-gray-700 pt-4 mt-2'>
+                  <div className='grid grid-cols-2 gap-4'>
+                    <div className='space-y-2 text-sm'>
+                      <p>
+                        <span className='font-medium'>시작 시간:</span><br />
+                        {formatDate(stats.botStatus.startTime)}
+                      </p>
+                      <p>
+                        <span className='font-medium'>마지막 활동:</span><br />
+                        {stats.botStatus.lastActivity
+                          ? formatDate(stats.botStatus.lastActivity)
+                          : '없음'}
+                      </p>
+                    </div>
+                    <div className='space-y-2 text-sm'>
+                      <p>
+                        <span className='font-medium'>총 메시지:</span><br />
+                        <span className='text-lg font-bold text-blue-600 dark:text-blue-400'>{stats.botStatus.totalMessages}</span>
+                      </p>
+                      <p>
+                        <span className='font-medium'>총 웹훅 로그:</span><br />
+                        <span className='text-lg font-bold text-green-600 dark:text-green-400'>{stats.botStatus.totalWebhookLogs}</span>
+                      </p>
+                    </div>
+                  </div>
                 </div>
+                {stats.botStatus.personId && (
+                  <div className='mt-4 text-xs text-gray-500'>
+                    <p>Bot ID: {stats.botStatus.personId.slice(0, 12)}...</p>
+                  </div>
+                )}
               </div>
 
               <div className='bg-white dark:bg-slate-800 p-6 rounded-lg shadow-lg'>
