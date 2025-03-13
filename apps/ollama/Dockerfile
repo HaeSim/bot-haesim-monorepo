@@ -4,9 +4,6 @@ FROM ollama/ollama:latest
 # 실행 포트
 EXPOSE 11434
 
-# 필요한 모델만 사전 설치
-RUN ollama pull huihui_ai/kanana-nano-abliterated
-
 # 모델 데이터 영구 저장을 위한 볼륨 설정
 VOLUME /root/.ollama
 
