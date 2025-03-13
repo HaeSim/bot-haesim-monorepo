@@ -29,6 +29,8 @@ FROM base AS build
 WORKDIR /usr/src/app
 # 의존성 복사
 COPY --from=deps /usr/src/app/node_modules ./node_modules
+# 루트 package.json 복사 - 워크스페이스 설정에 필요
+COPY package.json yarn.lock ./
 # 소스코드 복사
 COPY packages/ ./packages/
 COPY apps/api/ ./apps/api/
