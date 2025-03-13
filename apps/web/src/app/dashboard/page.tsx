@@ -332,7 +332,8 @@ export default function Dashboard() {
               </p>
               <p className='text-sm text-gray-500 mt-1'>
                 URL:{' '}
-                {process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}
+                {process.env.NEXT_PUBLIC_API_URL ||
+                  'NEXT_PUBLIC_API_URL가 없음'}
               </p>
             </div>
             <div>
