@@ -11,6 +11,7 @@ import {
   PersonDetails,
   ErrorWithMessage,
   MessageResponse,
+  BotInfo,
 } from '../interfaces/webex-types';
 import { CommandsService } from '../commands/commands.service';
 import { WebhookLogsService } from '../webhook-logs/webhook-logs.service';
@@ -393,11 +394,11 @@ export class BotService implements OnModuleInit {
   async getBotInfo(): Promise<BotInfo> {
     try {
       this.logger.debug('봇 정보 가져오기 시작');
-      
+
       // 프레임워크를 통해 봇 정보 가져오기
       const botInfo = await this.framework.getBotInfo();
       this.logger.debug(`봇 정보 응답 받음: ${JSON.stringify(botInfo)}`);
-      
+
       return botInfo;
     } catch (err) {
       const error = err as ErrorWithMessage;
