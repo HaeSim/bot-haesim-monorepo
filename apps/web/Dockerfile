@@ -10,7 +10,9 @@ COPY .npmrc ./
 COPY packages/*/package.json ./packages/
 COPY apps/web/package.json ./apps/web/
 # 의존성 설치
-RUN pnpm install
+RUN --mount=type=secret,id=GIT_AUTH_TOKEN \
+    export GIT_AUTH_TOKEN=$(cat /run/secrets/GIT_AUTH_TOKEN) && \
+    pnpm install
 
 # 소스 코드만 복사 (불필요한 파일 제외)
 COPY packages/ ./packages/
@@ -31,12 +33,18 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY .npmrc ./
 COPY packages/*/package.json ./packages/
 COPY apps/web/package.json ./apps/web/
-RUN pnpm install
+RUN --mount=type=secret,id=GIT_AUTH_TOKEN \
+    export GIT_AUTH_TOKEN=$(cat /run/secrets/GIT_AUTH_TOKEN) && \
+    pnpm install
 
 # 실제 소스 코드만 복사
 COPY packages/ ./packages/
 COPY apps/web/ ./apps/web/
 COPY turbo.json ./
+
+# ui 패키지 빌드
+RUN pnpm --filter ui build
+
 RUN echo "빌드 과정의 NEXT_PUBLIC_API_URL: $NEXT_PUBLIC_API_URL"
 # 병렬 빌드 활성화 및 Telemetry 비활성화
 RUN NEXT_TELEMETRY_DISABLED=1 pnpm --filter web build

@@ -37,7 +37,7 @@ jobs:
         with:
           version: 10.6.3
           run_install: false
-      
+
       # pnpm 캐시 설정
       - name: Get pnpm store directory
         id: pnpm-store-dir-path
@@ -187,7 +187,7 @@ jobs:
         with:
           version: 10.6.3
           run_install: false
-      
+
       # pnpm 캐시 설정
       - name: Get pnpm store directory
         id: pnpm-store-dir-path
@@ -323,7 +323,7 @@ jobs:
         with:
           version: 10.6.3
           run_install: false
-      
+
       # pnpm 캐시 설정
       - name: Get pnpm store directory
         id: pnpm-store-dir-path
@@ -392,8 +392,12 @@ jobs:
           cache-to: type=local,dest=/tmp/.buildx-cache-web-new,mode=max
           build-args: |
             NODE_ENV=production
+            NEXT_PUBLIC_API_URL=/api/v1
+            NEXT_TELEMETRY_DISABLED=1
           outputs: type=image,name=target
           provenance: false
+          secrets: |
+            GIT_AUTH_TOKEN=${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
 
       # Web 이미지 빌드 결과 확인
