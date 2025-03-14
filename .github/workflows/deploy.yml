@@ -30,11 +30,33 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 23
-          cache: 'yarn'
 
-      # 의존성 설치 - 경량화된 설정
+      # pnpm 설치
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8.15.5
+          run_install: false
+      
+      # pnpm 캐시 설정
+      - name: Get pnpm store directory
+        id: pnpm-store-dir-path
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        id: pnpm-cache
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      # 의존성 설치
       - name: Install essential dependencies
-        run: yarn install --frozen-lockfile
+        run: pnpm install
 
       # 변경된 앱 감지 - git diff 사용 + Turborepo 의존성 그래프 활용
       - name: Detect changed apps
@@ -94,13 +116,13 @@ jobs:
                 echo "변경된 패키지: $package"
                 
                 # 패키지가 api에 영향을 미치는지 확인
-                if yarn --silent turbo run build --dry=json --filter="api...[packages/$package]" 2>/dev/null | grep -q "api"; then
+                if pnpm --silent turbo run build --dry=json --filter="api...[packages/$package]" 2>/dev/null | grep -q "api"; then
                   echo "패키지 $package는 API에 영향을 줍니다"
                   CHANGE_API=true
                 fi
                 
                 # 패키지가 web에 영향을 미치는지 확인
-                if yarn --silent turbo run build --dry=json --filter="web...[packages/$package]" 2>/dev/null | grep -q "web"; then
+                if pnpm --silent turbo run build --dry=json --filter="web...[packages/$package]" 2>/dev/null | grep -q "web"; then
                   echo "패키지 $package는 Web에 영향을 줍니다"
                   CHANGE_WEB=true
                 fi
@@ -158,21 +180,43 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 23
-          cache: 'yarn'
+
+      # pnpm 설치
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8.15.5
+          run_install: false
+      
+      # pnpm 캐시 설정
+      - name: Get pnpm store directory
+        id: pnpm-store-dir-path
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        id: pnpm-cache
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
 
       # Turborepo 캐시 복원
       - name: Restore Turborepo cache
         uses: actions/cache@v3
         with:
           path: .turbo
-          key: ${{ runner.os }}-turbo-api-${{ hashFiles('**/yarn.lock') }}-${{ github.sha }}
+          key: ${{ runner.os }}-turbo-api-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-turbo-api-${{ hashFiles('**/yarn.lock') }}-
+            ${{ runner.os }}-turbo-api-${{ hashFiles('**/pnpm-lock.yaml') }}-
             ${{ runner.os }}-turbo-api-
 
       # 의존성 설치
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: pnpm install
 
       # GitHub Container Registry 로그인
       - name: Login to GitHub Container Registry
@@ -273,21 +317,43 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 23
-          cache: 'yarn'
+
+      # pnpm 설치
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8.15.5
+          run_install: false
+      
+      # pnpm 캐시 설정
+      - name: Get pnpm store directory
+        id: pnpm-store-dir-path
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        id: pnpm-cache
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
 
       # Turborepo 캐시 복원
       - name: Restore Turborepo cache
         uses: actions/cache@v3
         with:
           path: .turbo
-          key: ${{ runner.os }}-turbo-web-${{ hashFiles('**/yarn.lock') }}-${{ github.sha }}
+          key: ${{ runner.os }}-turbo-web-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-turbo-web-${{ hashFiles('**/yarn.lock') }}-
+            ${{ runner.os }}-turbo-web-${{ hashFiles('**/pnpm-lock.yaml') }}-
             ${{ runner.os }}-turbo-web-
 
       # 의존성 설치
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: pnpm install
 
       # GitHub Container Registry 로그인
       - name: Login to GitHub Container Registry

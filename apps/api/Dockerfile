@@ -13,16 +13,19 @@ WORKDIR /usr/src/app
 
 # 의존성 관리를 위한 별도 단계 - 캐시 최적화
 FROM base AS deps
+# pnpm 설치
+RUN npm install -g pnpm@8.15.5
+
 # 의존성 관련 파일 복사
-COPY package.json yarn.lock ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY turbo.json ./
 COPY packages/*/package.json ./packages/
 COPY apps/api/package.json ./apps/api/
+COPY .npmrc ./
 # 필요한 디렉토리 구조 생성
 RUN mkdir -p packages/shared packages/database packages/ui apps/api
-# 네트워크 동시성 설정 및 의존성 설치
-RUN yarn config set network-timeout 300000 && \
-    yarn install --frozen-lockfile --network-concurrency 4
+# 의존성 설치
+RUN pnpm install
 
 # 개발 빌드 단계
 FROM base AS build
@@ -35,21 +38,26 @@ COPY package.json yarn.lock ./
 COPY packages/ ./packages/
 COPY apps/api/ ./apps/api/
 COPY turbo.json ./
+# pnpm 설치
+RUN npm install -g pnpm@8.15.5
 # 빌드 환경 설정 - 메모리 설정 최적화
 ENV PATH="./node_modules/.bin:$PATH"
 ENV NODE_OPTIONS="--max-old-space-size=4096 --no-warnings"
 # 빌드 실행 (디버깅 개선)
-RUN cd apps/api && yarn build || (echo "빌드 실패 - 로그 확인" && cat tsconfig.json && exit 1)
+RUN cd apps/api && pnpm build || (echo "빌드 실패 - 로그 확인" && cat tsconfig.json && exit 1)
 
 # 프로덕션 의존성 단계
 FROM base AS prod-deps
-COPY package.json yarn.lock ./
+# pnpm 설치
+RUN npm install -g pnpm@8.15.5
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY .npmrc ./
 COPY turbo.json ./
 COPY packages/*/package.json ./packages/
 COPY apps/api/package.json ./apps/api/
 # 프로덕션 의존성만 설치
-RUN yarn config set network-timeout 300000 && \
-    yarn install --production=true --frozen-lockfile --network-concurrency 4
+RUN pnpm install --prod
 
 # 최종 프로덕션 이미지
 FROM base AS production
