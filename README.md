@@ -5,7 +5,7 @@ Haesim Bot은 NestJS, Next.js, Ollama LLM을 활용한 Webex 통합 챗봇 솔�
 ![GitHub last commit](https://img.shields.io/github/last-commit/haesim/bot-haesim-monorepo)
 ![License](https://img.shields.io/badge/license-Private-blue)
 ![Node.js](https://img.shields.io/badge/Node.js-23.x-green)
-![Yarn](https://img.shields.io/badge/Yarn-1.22.21-blue)
+![pnpm](https://img.shields.io/badge/pnpm-10.6.3-blue)
 
 ## 🏗️ 아키텍처 개요
 
@@ -390,7 +390,7 @@ graph LR
   "engines": {
     "node": ">=23.0.0"
   },
-  "packageManager": "pnpm@8.15.5"
+  "packageManager": "pnpm@10.6.3"
 }
 ```
 
@@ -574,7 +574,7 @@ fi
 if echo "$CHANGED_FILES" | grep -q "^packages/"; then
   for package in $CHANGED_PACKAGES; do
     # 패키지가 api에 영향을 미치는지 확인
-    if yarn --silent turbo run build --dry=json --filter="api...[packages/$package]" 2>/dev/null | grep -q "api"; then
+    if pnpm --silent turbo run build --dry=json --filter="api...[packages/$package]" 2>/dev/null | grep -q "api"; then
       echo "패키지 $package는 API에 영향을 줍니다"
       CHANGE_API=true
     fi

@@ -22,12 +22,12 @@ jobs:
       repo_lowercase: ${{ steps.set-lowercase.outputs.repo_lowercase }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 2 # 증분 빌드를 위해 이전 커밋 포함
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 23
 
@@ -35,7 +35,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: 8.15.5
+          version: 10.6.3
           run_install: false
       
       # pnpm 캐시 설정
@@ -46,7 +46,7 @@ jobs:
           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
       - name: Setup pnpm cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         id: pnpm-cache
         with:
           path: ${{ env.STORE_PATH }}
@@ -174,10 +174,10 @@ jobs:
       REPO_LOWERCASE: ${{ needs.analyze-changes.outputs.repo_lowercase }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 23
 
@@ -185,7 +185,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: 8.15.5
+          version: 10.6.3
           run_install: false
       
       # pnpm 캐시 설정
@@ -196,7 +196,7 @@ jobs:
           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
       - name: Setup pnpm cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         id: pnpm-cache
         with:
           path: ${{ env.STORE_PATH }}
@@ -205,13 +205,12 @@ jobs:
             ${{ runner.os }}-pnpm-store-
 
       # Turborepo 캐시 복원
-      - name: Restore Turborepo cache
-        uses: actions/cache@v3
+      - name: Cache turbo build setup
+        uses: actions/cache@v4
         with:
           path: .turbo
-          key: ${{ runner.os }}-turbo-api-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
+          key: ${{ runner.os }}-turbo-api-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-turbo-api-${{ hashFiles('**/pnpm-lock.yaml') }}-
             ${{ runner.os }}-turbo-api-
 
       # 의존성 설치
@@ -237,7 +236,7 @@ jobs:
 
       # Docker 레이어 캐싱 - API용
       - name: Cache Docker layers for API
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache-api
           key: ${{ runner.os }}-arm64-buildx-api-${{ github.sha }}
@@ -311,10 +310,10 @@ jobs:
       REPO_LOWERCASE: ${{ needs.analyze-changes.outputs.repo_lowercase }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 23
 
@@ -322,7 +321,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: 8.15.5
+          version: 10.6.3
           run_install: false
       
       # pnpm 캐시 설정
@@ -333,7 +332,7 @@ jobs:
           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
       - name: Setup pnpm cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         id: pnpm-cache
         with:
           path: ${{ env.STORE_PATH }}
@@ -342,13 +341,12 @@ jobs:
             ${{ runner.os }}-pnpm-store-
 
       # Turborepo 캐시 복원
-      - name: Restore Turborepo cache
-        uses: actions/cache@v3
+      - name: Cache turbo build setup
+        uses: actions/cache@v4
         with:
           path: .turbo
-          key: ${{ runner.os }}-turbo-web-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
+          key: ${{ runner.os }}-turbo-web-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-turbo-web-${{ hashFiles('**/pnpm-lock.yaml') }}-
             ${{ runner.os }}-turbo-web-
 
       # 의존성 설치
@@ -368,7 +366,7 @@ jobs:
 
       # Docker 레이어 캐싱 - Web용
       - name: Cache Docker layers for Web
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache-web
           key: ${{ runner.os }}-arm64-buildx-web-${{ github.sha }}
@@ -443,7 +441,7 @@ jobs:
       REPO_LOWERCASE: ${{ needs.analyze-changes.outputs.repo_lowercase }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # GitHub Container Registry 로그인
       - name: Login to GitHub Container Registry
@@ -458,7 +456,7 @@ jobs:
 
       # Docker 레이어 캐싱 - Ollama용
       - name: Cache Docker layers for Ollama
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache-ollama
           key: ${{ runner.os }}-arm64-buildx-ollama-${{ github.sha }}
@@ -534,7 +532,7 @@ jobs:
       OLLAMA_BUILD_SUCCESS: ${{ needs.build-ollama.outputs.ollama_build_success || 'false' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # 이미지 패키지를 공개로 설정
       - name: Make packages public

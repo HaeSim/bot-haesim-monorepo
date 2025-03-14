@@ -9,7 +9,7 @@ services:
     volumes:
       # 개발 환경에서만 볼륨 마운트 (NODE_ENV=development 일 때)
       - ./apps/api/src:/usr/src/app/apps/api/src
-    command: sh -c "if [ \"$${NODE_ENV:-development}\" = \"development\" ]; then yarn workspace api dev; else node dist/main; fi"
+    command: sh -c "if [ \"$${NODE_ENV:-development}\" = \"development\" ]; then pnpm --filter api dev; else node dist/main; fi"
     ports:
       - '${API_PORT:-8080}:8080'
     networks:
@@ -48,7 +48,7 @@ services:
       # 개발 환경에서만 볼륨 마운트 (NODE_ENV=development 일 때)
       - ./apps/web/src:/usr/src/app/apps/web/src
       - ./apps/web/public:/usr/src/app/apps/web/public
-    command: sh -c "if [ \"$${NODE_ENV:-development}\" = \"development\" ]; then yarn workspace web dev; else node .next/standalone/server.js; fi"
+    command: sh -c "if [ \"$${NODE_ENV:-development}\" = \"development\" ]; then pnpm --filter web dev; else node .next/standalone/server.js; fi"
     ports:
       - '${WEB_PORT:-3000}:3000'
     networks:

@@ -14,7 +14,7 @@ WORKDIR /usr/src/app
 # 의존성 관리를 위한 별도 단계 - 캐시 최적화
 FROM base AS deps
 # pnpm 설치
-RUN npm install -g pnpm@8.15.5
+RUN npm install -g pnpm@10.6.3
 
 # 의존성 관련 파일 복사
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -33,13 +33,13 @@ WORKDIR /usr/src/app
 # 의존성 복사
 COPY --from=deps /usr/src/app/node_modules ./node_modules
 # 루트 package.json 복사 - 워크스페이스 설정에 필요
-COPY package.json yarn.lock ./
+COPY package.json pnpm-lock.yaml ./
 # 소스코드 복사
 COPY packages/ ./packages/
 COPY apps/api/ ./apps/api/
 COPY turbo.json ./
 # pnpm 설치
-RUN npm install -g pnpm@8.15.5
+RUN npm install -g pnpm@10.6.3
 # 빌드 환경 설정 - 메모리 설정 최적화
 ENV PATH="./node_modules/.bin:$PATH"
 ENV NODE_OPTIONS="--max-old-space-size=4096 --no-warnings"
@@ -49,7 +49,7 @@ RUN cd apps/api && pnpm build || (echo "빌드 실패 - 로그 확인" && cat ts
 # 프로덕션 의존성 단계
 FROM base AS prod-deps
 # pnpm 설치
-RUN npm install -g pnpm@8.15.5
+RUN npm install -g pnpm@10.6.3
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY .npmrc ./
