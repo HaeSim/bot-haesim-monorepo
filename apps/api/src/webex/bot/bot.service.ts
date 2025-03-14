@@ -17,6 +17,7 @@ import { CommandsService } from '../commands/commands.service';
 import { WebhookLogsService } from '../webhook-logs/webhook-logs.service';
 import { OllamaService } from '../../ollama/ollama.service';
 import { firstValueFrom } from 'rxjs';
+import { MessagesService } from '../../messages/messages.service';
 
 @Injectable()
 export class BotService implements OnModuleInit {
@@ -28,7 +29,8 @@ export class BotService implements OnModuleInit {
     private configService: ConfigService,
     private webexCommands: CommandsService,
     private webhookLogsService: WebhookLogsService,
-    private ollamaService: OllamaService
+    private ollamaService: OllamaService,
+    private messagesService: MessagesService
   ) {
     // Webex 프레임워크 초기화
     const config = {
@@ -116,6 +118,19 @@ export class BotService implements OnModuleInit {
         try {
           // 명령어 매칭 (텍스트가 있을 경우)
           if (trigger.text) {
+            // 메시지 저장
+            try {
+              await this.messagesService.create(
+                trigger.text,
+                trigger.person.id,
+                bot.room.id
+              );
+              this.logger.log(`메시지 저장 완료: "${trigger.text}" - 사용자: ${trigger.person.displayName}`);
+            } catch (err) {
+              const error = err as ErrorWithMessage;
+              this.logger.error(`메시지 저장 실패: ${error.message}`);
+            }
+            
             const command = this.webexCommands.findMatchingCommand(
               trigger.text
             );
@@ -205,6 +220,19 @@ export class BotService implements OnModuleInit {
         text = text.replace(mentionRegex, '');
 
         this.logger.debug(`전처리된 메시지 텍스트: "${text}"`);
+
+        // 메시지 저장
+        try {
+          await this.messagesService.create(
+            text,
+            webhookData.data.personId,
+            webhookData.data.roomId
+          );
+          this.logger.log(`메시지 저장 완료: "${text}" - 사용자: ${person.displayName}`);
+        } catch (err) {
+          const error = err as ErrorWithMessage;
+          this.logger.error(`메시지 저장 실패: ${error.message}`);
+        }
 
         // 명령어 검색 및 실행
         const matchingCommand = this.webexCommands.findMatchingCommand(text);
@@ -304,17 +332,20 @@ export class BotService implements OnModuleInit {
     try {
       this.logger.debug(`메시지 전송 시작 - Room ID: ${roomId}`);
       let messagePayload: Record<string, unknown>;
+      let messageText: string;
 
       if (typeof message === 'string') {
         messagePayload = {
           roomId,
           text: message,
         };
+        messageText = message;
       } else {
         messagePayload = {
           roomId,
           ...message,
         };
+        messageText = message.text ? String(message.text) : JSON.stringify(message);
       }
 
       this.logger.debug(`메시지 페이로드: ${JSON.stringify(messagePayload)}`);
@@ -333,6 +364,22 @@ export class BotService implements OnModuleInit {
       );
 
       this.logger.debug(`메시지 전송 응답: ${JSON.stringify(response.data)}`);
+      
+      // 봇 응답 메시지도 저장
+      try {
+        // 봇 ID를 가져오기 (시스템 식별자)
+        const botInfo = await this.getBotInfo();
+        await this.messagesService.create(
+          messageText,
+          botInfo.id,
+          roomId
+        );
+        this.logger.log(`봇 응답 메시지 저장 완료: "${messageText.substring(0, 100)}${messageText.length > 100 ? '...' : ''}"`);
+      } catch (err) {
+        const error = err as ErrorWithMessage;
+        this.logger.error(`봇 응답 메시지 저장 실패: ${error.message}`);
+      }
+
       return response.data;
     } catch (err) {
       const error = err as ErrorWithMessage;
