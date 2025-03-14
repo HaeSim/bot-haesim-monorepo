@@ -363,7 +363,8 @@ graph LR
   - 빌드 캐싱으로 개발 속도 향상
   - 작업 간 의존성 그래프 관리
   - 워크스페이스 기반 병렬 빌드 최적화
-- **Yarn v1.22**: 패키지 매니저
+- **pnpm v8.15.x**: 패키지 매니저
+  - 효율적인 디스크 공간 사용 (하드 링크 활용)
   - 워크스페이스 기반 모노레포 패키지 관리
   - 의존성 호이스팅 및 중복 제거
 - **Husky & lint-staged**: 커밋 전 검증
@@ -375,7 +376,7 @@ graph LR
 ### 필수 사전 요구사항
 
 - **Node.js 23.x 이상**: 모든 앱과 패키지 빌드에 필요
-- **Yarn 1.22.x**: 워크스페이스 기반 모노레포 관리
+- **pnpm 8.15.x 이상**: 워크스페이스 기반 모노레포 관리
 - **Docker 및 Docker Compose**: 컨테이너화된 개발 및 배포 환경
 - **Git**: 버전 관리 및 GitHub Actions 연동
 
@@ -389,7 +390,7 @@ graph LR
   "engines": {
     "node": ">=23.0.0"
   },
-  "packageManager": "yarn@1.22.21"
+  "packageManager": "pnpm@8.15.5"
 }
 ```
 
@@ -401,22 +402,22 @@ git clone https://github.com/haesim/bot-haesim-monorepo.git
 cd bot-haesim-monorepo
 
 # 의존성 설치
-yarn install
+pnpm install
 
 # 환경 변수 설정
 cp .env.example .env
 # .env 파일 편집하여 필요한 환경 변수 설정
 
 # 개발 서버 실행 (모든 앱)
-yarn dev
+pnpm dev
 
 # 또는 특정 앱만 실행
-yarn workspace api dev
-yarn workspace web dev
+pnpm --filter api dev
+pnpm --filter web dev
 
 # 필요한 경우 개별 빌드
-yarn build
-yarn workspace api build
+pnpm build
+pnpm --filter api build
 ```
 
 ### Docker 개발 환경
@@ -464,17 +465,17 @@ OLLAMA_KEEP_ALIVE=-1        # 모델 메모리 유지 설정
 
 ```bash
 # 타입 검사
-yarn workspace api tsc --noEmit
-yarn workspace web tsc --noEmit
+pnpm --filter api tsc --noEmit
+pnpm --filter web tsc --noEmit
 
 # 린트 검사
-yarn lint
+pnpm lint
 
 # 테스트 실행
-yarn test
+pnpm test
 
 # 포맷팅
-yarn format
+pnpm format
 ```
 
 ## 🚢 CI/CD 및 배포 구성
