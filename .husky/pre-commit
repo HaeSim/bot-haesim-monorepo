@@ -1,0 +1,4 @@
+#!/bin/sh
+
+# Run lint-staged to run type checks on staged files
+npx lint-staged

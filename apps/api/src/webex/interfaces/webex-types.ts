@@ -10,6 +10,7 @@ export interface Bot {
 export interface TriggerPerson {
   displayName: string;
   email: string;
+  id: string;
 }
 
 export interface Trigger {
@@ -55,7 +56,7 @@ export interface WebexFramework {
     phrase: string | RegExp,
     callback: (bot: Bot, trigger: Trigger) => void,
     helpText?: string,
-    priority?: number,
+    priority?: number
   ) => void;
   getBotInfo: () => Promise<BotInfo>;
 }

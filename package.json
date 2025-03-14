@@ -13,14 +13,25 @@
     "test": "turbo test",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "build:ollama": "docker build -t ollama-server ./apps/ollama",
-    "start:ollama": "docker run --rm -p 11434:11434 ollama-server"
+    "start:ollama": "docker run --rm -p 11434:11434 ollama-server",
+    "prepare": "husky"
   },
   "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.0",
     "prettier": "^3.4.2",
     "turbo": "^2.0.0"
   },
   "engines": {
     "node": ">=23.0.0"
   },
-  "packageManager": "yarn@1.22.21"
+  "packageManager": "yarn@1.22.21",
+  "lint-staged": {
+    "apps/api/**/*.ts": [
+      "yarn workspace api tsc --noEmit"
+    ],
+    "apps/web/**/*.{ts,tsx}": [
+      "yarn workspace web tsc --noEmit"
+    ]
+  }
 }
