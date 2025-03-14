@@ -35,11 +35,11 @@ COPY package.json yarn.lock ./
 COPY packages/ ./packages/
 COPY apps/api/ ./apps/api/
 COPY turbo.json ./
-# 빌드 환경 설정
+# 빌드 환경 설정 - 메모리 설정 최적화
 ENV PATH="./node_modules/.bin:$PATH"
-ENV NODE_OPTIONS="--max-old-space-size=8192 --no-warnings"
-# 빌드 실행 (자세한 로그 활성화)
-RUN yarn workspace api build --verbose
+ENV NODE_OPTIONS="--max-old-space-size=4096 --no-warnings"
+# 빌드 실행 (디버깅 개선)
+RUN cd apps/api && yarn build || (echo "빌드 실패 - 로그 확인" && cat tsconfig.json && exit 1)
 
 # 프로덕션 의존성 단계
 FROM base AS prod-deps
