@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { Button } from 'ui';
 
 export default function Home() {
   return (
@@ -15,6 +16,10 @@ export default function Home() {
           <p className='text-gray-500 dark:text-gray-400 text-xl'>
             Webex 통합 봇 플랫폼
           </p>
+          <div className='mt-6 flex gap-4'>
+            <Button variant='default'>시작하기</Button>
+            <Button variant='outline'>더 알아보기</Button>
+          </div>
         </header>
 
         <div className='grid grid-cols-1 md:grid-cols-2 gap-8 mb-12'>
