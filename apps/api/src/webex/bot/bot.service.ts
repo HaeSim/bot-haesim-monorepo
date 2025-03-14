@@ -15,6 +15,8 @@ import {
 } from '../interfaces/webex-types';
 import { CommandsService } from '../commands/commands.service';
 import { WebhookLogsService } from '../webhook-logs/webhook-logs.service';
+import { OllamaService } from '../../ollama/ollama.service';
+import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class BotService implements OnModuleInit {
@@ -25,7 +27,8 @@ export class BotService implements OnModuleInit {
   constructor(
     private configService: ConfigService,
     private webexCommands: CommandsService,
-    private webhookLogsService: WebhookLogsService
+    private webhookLogsService: WebhookLogsService,
+    private ollamaService: OllamaService
   ) {
     // Webex 프레임워크 초기화
     const config = {
@@ -117,13 +120,31 @@ export class BotService implements OnModuleInit {
               trigger.text
             );
             if (!command) {
-              // 매칭되는 명령어가 없으면 도움말 제안
-              this.logger.log(
-                `매칭되는 명령어 없음: "${trigger.text}" - 사용자: ${trigger.person.displayName}`
-              );
-              await bot.say(
-                '이 명령어를 이해할 수 없습니다. "/도움말"을 입력하여 사용 가능한 명령어를 확인하세요.'
-              );
+              // "/"로 시작하지 않는 일반 메시지의 경우 Ollama로 처리
+              if (!trigger.text.startsWith('/')) {
+                this.logger.log(
+                  `Ollama로 처리할 메시지: "${trigger.text}" - 사용자: ${trigger.person.displayName}`
+                );
+                try {
+                  // Ollama 서비스를 통해 응답 생성
+                  const response = await firstValueFrom(this.ollamaService.generateChatCompletion(trigger.text));
+                  await bot.say(response);
+                } catch (err) {
+                  const error = err as ErrorWithMessage;
+                  this.logger.error(`Ollama 응답 생성 오류: ${error.message}`);
+                  await bot.say(
+                    `죄송합니다. 응답을 생성하는 중 문제가 발생했습니다. 다시 시도해주세요.`
+                  );
+                }
+              } else {
+                // 매칭되는 명령어가 없으면 도움말 제안
+                this.logger.log(
+                  `매칭되는 명령어 없음: "${trigger.text}" - 사용자: ${trigger.person.displayName}`
+                );
+                await bot.say(
+                  '이 명령어를 이해할 수 없습니다. "/도움말"을 입력하여 사용 가능한 명령어를 확인하세요.'
+                );
+              }
             }
           }
         } catch (err) {
@@ -236,13 +257,32 @@ export class BotService implements OnModuleInit {
             );
           }
         } else {
-          this.logger.log(
-            `매칭되는 명령어 없음: "${text}" - 사용자: ${person.displayName}`
-          );
-          await this.sendMessage(
-            webhookData.data.roomId,
-            '이 명령어를 이해할 수 없습니다. "/도움말"을 입력하여 사용 가능한 명령어를 확인하세요.'
-          );
+          // "/"로 시작하지 않는 일반 메시지의 경우 Ollama로 처리
+          if (!text.startsWith('/')) {
+            this.logger.log(
+              `Ollama로 처리할 메시지: "${text}" - 사용자: ${person.displayName}`
+            );
+            try {
+              // Ollama 서비스를 통해 응답 생성
+              const response = await firstValueFrom(this.ollamaService.generateChatCompletion(text));
+              await this.sendMessage(webhookData.data.roomId, response);
+            } catch (err) {
+              const error = err as ErrorWithMessage;
+              this.logger.error(`Ollama 응답 생성 오류: ${error.message}`);
+              await this.sendMessage(
+                webhookData.data.roomId,
+                `죄송합니다. 응답을 생성하는 중 문제가 발생했습니다. 다시 시도해주세요.`
+              );
+            }
+          } else {
+            this.logger.log(
+              `매칭되는 명령어 없음: "${text}" - 사용자: ${person.displayName}`
+            );
+            await this.sendMessage(
+              webhookData.data.roomId,
+              '이 명령어를 이해할 수 없습니다. "/도움말"을 입력하여 사용 가능한 명령어를 확인하세요.'
+            );
+          }
         }
       }
 
