@@ -37,9 +37,9 @@ COPY apps/api/ ./apps/api/
 COPY turbo.json ./
 # 빌드 환경 설정
 ENV PATH="./node_modules/.bin:$PATH"
-ENV NODE_OPTIONS="--max-old-space-size=4096 --no-warnings"
-# 빌드 실행
-RUN yarn workspace api build
+ENV NODE_OPTIONS="--max-old-space-size=8192 --no-warnings"
+# 빌드 실행 (자세한 로그 활성화)
+RUN yarn workspace api build --verbose
 
 # 프로덕션 의존성 단계
 FROM base AS prod-deps
