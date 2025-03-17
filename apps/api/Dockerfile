@@ -41,10 +41,12 @@ COPY turbo.json ./
 # pnpm 설치
 RUN npm install -g pnpm@10.6.3
 # 빌드 환경 설정 - 메모리 설정 최적화
-ENV PATH="./node_modules/.bin:$PATH"
+ENV PATH="./node_modules/.bin:$PATH" 
 ENV NODE_OPTIONS="--max-old-space-size=4096 --no-warnings"
+# NestJS CLI 전역 설치
+RUN npm install -g @nestjs/cli
 # 빌드 실행 (디버깅 개선)
-RUN cd apps/api && pnpm build || (echo "빌드 실패 - 로그 확인" && cat tsconfig.json && exit 1)
+RUN cd apps/api && npm install && pnpm build || (echo "빌드 실패 - 로그 확인" && cat tsconfig.json && exit 1)
 
 # 프로덕션 의존성 단계
 FROM base AS prod-deps
