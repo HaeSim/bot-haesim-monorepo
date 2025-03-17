@@ -786,7 +786,7 @@ jobs:
 
             # 서비스가 하나라도 존재하는지 확인
             if [ "$API_EXISTS" = "true" ] || [ "$WEB_EXISTS" = "true" ] || [ "$OLLAMA_EXISTS" = "true" ]; then
-              echo "서비스를 재시작합니다..."
+              echo "서비스를 재시작합니다. 존재하는 서비스: $API_EXISTS, $WEB_EXISTS, $OLLAMA_EXISTS"
               
               # 변경된 서비스만 재시작 또는 모든 서비스 재시작
               docker-compose down || true
