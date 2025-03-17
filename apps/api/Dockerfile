@@ -56,8 +56,9 @@ COPY .npmrc ./
 COPY turbo.json ./
 COPY packages/*/package.json ./packages/
 COPY apps/api/package.json ./apps/api/
-# 프로덕션 의존성만 설치
-RUN pnpm install --prod
+# 프로덕션 의존성만 설치 - husky 비활성화
+ENV HUSKY=0
+RUN pnpm install --prod --no-scripts
 
 # 최종 프로덕션 이미지
 FROM base AS production
