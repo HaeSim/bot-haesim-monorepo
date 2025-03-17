@@ -42,7 +42,8 @@ COPY packages/ ./packages/
 COPY apps/web/ ./apps/web/
 COPY turbo.json ./
 
-# ui 패키지 빌드
+# ui 패키지 빌드 - tsup 전역 설치 후 실행
+RUN npm install -g tsup
 RUN pnpm --filter ui build
 
 RUN echo "빌드 과정의 NEXT_PUBLIC_API_URL: $NEXT_PUBLIC_API_URL"
