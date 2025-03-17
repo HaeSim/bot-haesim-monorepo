@@ -56,9 +56,14 @@ COPY .npmrc ./
 COPY turbo.json ./
 COPY packages/*/package.json ./packages/
 COPY apps/api/package.json ./apps/api/
-# 프로덕션 의존성만 설치 - husky 비활성화
-ENV HUSKY=0
-RUN pnpm install --prod --no-scripts
+# husky를 제거하고 프로덕션 의존성만 설치
+COPY package.json ./tmp-package.json
+ENV HUSKY=0 
+ENV HUSKY_SKIP_INSTALL=1
+RUN sed -i 's/"husky".*,//g' ./tmp-package.json && \
+    cat ./tmp-package.json > ./package.json && \
+    sed -i 's/"prepare".*,//g' ./package.json && \
+    pnpm install --prod --ignore-scripts
 
 # 최종 프로덕션 이미지
 FROM base AS production
