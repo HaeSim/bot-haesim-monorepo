@@ -42,8 +42,9 @@ COPY packages/ ./packages/
 COPY apps/web/ ./apps/web/
 COPY turbo.json ./
 
-# ui 패키지 빌드 - 패키지의 로컬 의존성 활용
-RUN pnpm --filter ui build
+# ui 패키지 빌드 - 명시적으로 ui 패키지 먼저 설치하고 빌드
+RUN cd packages/ui && pnpm install && npm install -g tsup
+RUN cd packages/ui && tsup src/index.ts --format cjs,esm --dts
 
 RUN echo "빌드 과정의 NEXT_PUBLIC_API_URL: $NEXT_PUBLIC_API_URL"
 # 병렬 빌드 활성화 및 Telemetry 비활성화
