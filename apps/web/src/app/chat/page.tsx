@@ -11,8 +11,7 @@ import {
   CardFooter,
 } from 'ui';
 import { Textarea } from 'ui';
-import { Avatar, AvatarFallback, AvatarImage } from 'ui';
-import { Separator } from 'ui';
+import { Avatar, AvatarFallback } from 'ui';
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<

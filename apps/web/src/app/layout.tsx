@@ -3,14 +3,10 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import Link from 'next/link';
 import {
   NavigationMenu,
-  NavigationMenuContent,
   NavigationMenuItem,
   NavigationMenuLink,
   NavigationMenuList,
-  NavigationMenuTrigger,
 } from 'ui';
-import { Button } from 'ui';
-import { Separator } from 'ui';
 import { Toaster } from 'ui';
 import './globals.css';
 

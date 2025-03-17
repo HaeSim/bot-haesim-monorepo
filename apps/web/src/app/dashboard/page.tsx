@@ -3,7 +3,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from 'ui';
 import {
   Table,
   TableBody,
-  TableCaption,
   TableCell,
   TableHead,
   TableHeader,
@@ -11,9 +10,49 @@ import {
 } from 'ui';
 import { Badge } from 'ui';
 import { Alert, AlertDescription, AlertTitle } from 'ui';
-import { Separator } from 'ui';
 
-async function fetchMonitoringStats() {
+// 메시지, 웹훅 로그, 대화방 등의 타입 정의
+interface Message {
+  id: string;
+  createdAt: string;
+  personEmail: string;
+  text: string;
+}
+
+interface WebhookLog {
+  id: string;
+  createdAt: string;
+  resource: string;
+  event: string;
+}
+
+interface Room {
+  id: string;
+  title: string;
+  type: string;
+  created: string;
+  lastActivity: string;
+}
+
+interface BotStatus {
+  isOnline: boolean;
+  displayName: string;
+  startTime: string;
+  lastActivity: string;
+  totalWebhookLogs: number;
+  totalMessages: number;
+}
+
+interface MonitoringStats {
+  botStatus: BotStatus;
+  recentMessages: Message[];
+  recentWebhookLogs: WebhookLog[];
+  activeRooms: Room[];
+  eventBreakdown: Record<string, number>;
+  resourceBreakdown: Record<string, number>;
+}
+
+async function fetchMonitoringStats(): Promise<MonitoringStats | null> {
   const apiUrl = process.env.API_SERVER_URL || 'http://localhost:8080';
   try {
     const response = await fetch(`${apiUrl}/monitor/stats`, {
@@ -36,7 +75,7 @@ export default async function Dashboard() {
   const connected = stats !== null;
 
   // 날짜 포맷 함수
-  const formatDate = (dateStr) => {
+  const formatDate = (dateStr: string) => {
     if (!dateStr) return '없음';
     const date = new Date(dateStr);
     return date.toLocaleString('ko-KR');
@@ -65,7 +104,7 @@ export default async function Dashboard() {
               <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
                 <CardTitle className='text-sm font-medium'>상태</CardTitle>
                 <Badge
-                  variant={stats.botStatus.isOnline ? 'success' : 'destructive'}
+                  variant={stats.botStatus.isOnline ? 'default' : 'destructive'}
                 >
                   {stats.botStatus.isOnline ? '온라인' : '오프라인'}
                 </Badge>
@@ -161,7 +200,7 @@ export default async function Dashboard() {
                           </TableCell>
                         </TableRow>
                       ) : (
-                        stats.recentMessages.map((msg) => (
+                        stats.recentMessages.map((msg: Message) => (
                           <TableRow key={msg.id}>
                             <TableCell className='whitespace-nowrap'>
                               {formatDate(msg.createdAt)}
@@ -204,7 +243,7 @@ export default async function Dashboard() {
                           </TableCell>
                         </TableRow>
                       ) : (
-                        stats.recentWebhookLogs.map((log) => (
+                        stats.recentWebhookLogs.map((log: WebhookLog) => (
                           <TableRow key={log.id}>
                             <TableCell className='whitespace-nowrap'>
                               {formatDate(log.createdAt)}
@@ -250,7 +289,7 @@ export default async function Dashboard() {
                           </TableCell>
                         </TableRow>
                       ) : (
-                        stats.activeRooms.map((room) => (
+                        stats.activeRooms.map((room: Room) => (
                           <TableRow key={room.id}>
                             <TableCell>{room.title}</TableCell>
                             <TableCell>
@@ -283,7 +322,7 @@ export default async function Dashboard() {
                   <CardContent>
                     <div className='space-y-2'>
                       {Object.entries(stats.eventBreakdown).map(
-                        ([event, count]) => (
+                        ([event, count]: [string, number]) => (
                           <div
                             key={event}
                             className='flex items-center justify-between'
@@ -319,7 +358,7 @@ export default async function Dashboard() {
                   <CardContent>
                     <div className='space-y-2'>
                       {Object.entries(stats.resourceBreakdown).map(
-                        ([resource, count]) => (
+                        ([resource, count]: [string, number]) => (
                           <div
                             key={resource}
                             className='flex items-center justify-between'

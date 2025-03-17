@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { Toaster } from 'ui';
 import { Separator } from 'ui';
 import { Button } from 'ui';
-import { Avatar, AvatarFallback, AvatarImage } from 'ui';
+import { Avatar, AvatarFallback } from 'ui';
 import {
   DropdownMenu,
   DropdownMenuContent,
