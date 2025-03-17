@@ -1,6 +1,18 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { Button } from 'ui';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardFooter,
+} from 'ui';
+import { Textarea } from 'ui';
+import { Avatar, AvatarFallback, AvatarImage } from 'ui';
+import { Separator } from 'ui';
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<
@@ -93,72 +105,74 @@ export default function ChatPage() {
   };
 
   return (
-    <div className='flex flex-col h-screen max-w-4xl mx-auto bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100'>
-      <div className='bg-white dark:bg-gray-800 p-4 shadow-md'>
-        <h1 className='text-2xl font-bold text-gray-800 dark:text-gray-100'>
-          Ollama Chat
-        </h1>
-      </div>
-
-      <div className='flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-gray-900'>
-        {messages.length === 0 ? (
-          <div className='flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400'>
-            <div className='w-16 h-16 mb-4 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center'>
-              <svg
-                xmlns='http://www.w3.org/2000/svg'
-                fill='none'
-                viewBox='0 0 24 24'
-                strokeWidth={1.5}
-                stroke='currentColor'
-                className='w-8 h-8 text-blue-500 dark:text-blue-300'
-              >
-                <path
-                  strokeLinecap='round'
-                  strokeLinejoin='round'
-                  d='M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z'
-                />
-              </svg>
+    <div className='container mx-auto py-6'>
+      <Card className='h-[calc(100vh-10rem)]'>
+        <CardHeader>
+          <CardTitle>Ollama 채팅</CardTitle>
+          <CardDescription>
+            로컬 LLM 모델을 활용한 대화형 AI 인터페이스입니다.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className='flex flex-col h-[calc(100%-10rem)]'>
+          <div className='flex-1 overflow-y-auto pr-4'>
+            <div className='space-y-4 mb-4'>
+              {messages.length === 0 ? (
+                <div className='text-center py-12'>
+                  <p className='text-2xl font-semibold text-muted-foreground mb-2'>
+                    Ollama와 대화를 시작하세요
+                  </p>
+                  <p className='text-muted-foreground'>
+                    메시지를 입력하면 AI가 응답합니다
+                  </p>
+                </div>
+              ) : (
+                messages.map((message, index) => (
+                  <div
+                    key={index}
+                    className={`flex ${
+                      message.role === 'user' ? 'justify-end' : 'justify-start'
+                    }`}
+                  >
+                    <div
+                      className={`flex ${
+                        message.role === 'user'
+                          ? 'flex-row-reverse'
+                          : 'flex-row'
+                      } items-start gap-2 max-w-[80%]`}
+                    >
+                      <Avatar className='h-8 w-8'>
+                        <AvatarFallback>
+                          {message.role === 'user' ? 'U' : 'AI'}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div
+                        className={`px-4 py-2 rounded-lg ${
+                          message.role === 'user'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted'
+                        }`}
+                      >
+                        <p className='whitespace-pre-wrap break-words'>
+                          {message.content || (
+                            <span className='text-muted-foreground italic'>
+                              {isLoading && message.role === 'assistant'
+                                ? '생각 중...'
+                                : ''}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+              <div ref={messagesEndRef} />
             </div>
-            <p className='text-lg'>무엇이든 물어보세요</p>
-            <p className='text-sm mt-2'>AI 어시스턴트가 도와드립니다</p>
           </div>
-        ) : (
-          messages.map((message, index) => (
-            <div
-              key={index}
-              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`p-4 rounded-lg max-w-[85%] ${
-                  message.role === 'user'
-                    ? 'bg-blue-500 text-white dark:bg-blue-600'
-                    : 'bg-gray-200 dark:bg-gray-700 dark:text-gray-100'
-                }`}
-              >
-                <p className='whitespace-pre-wrap'>
-                  {message.content ||
-                    (isLoading && index === messages.length - 1 ? (
-                      <span className='inline-flex items-center'>
-                        <span className='animate-pulse'>생각 중</span>
-                        <span className='ml-1 animate-bounce delay-100'>.</span>
-                        <span className='animate-bounce delay-200'>.</span>
-                        <span className='animate-bounce delay-300'>.</span>
-                      </span>
-                    ) : (
-                      ''
-                    ))}
-                </p>
-              </div>
-            </div>
-          ))
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      <div className='p-4 bg-white dark:bg-gray-800 border-t dark:border-gray-700 shadow-md'>
-        <form onSubmit={handleSubmit} className='flex space-x-2'>
-          <div className='flex-1 relative'>
-            <textarea
+        </CardContent>
+        <CardFooter className='border-t pt-4'>
+          <form className='w-full flex gap-2' onSubmit={handleSubmit}>
+            <Textarea
               ref={inputRef}
               value={input}
               onChange={(e) => {
@@ -167,49 +181,15 @@ export default function ChatPage() {
               }}
               onKeyDown={handleKeyDown}
               placeholder='메시지를 입력하세요...'
-              className='w-full p-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:focus:ring-blue-500 resize-none min-h-[44px] max-h-[200px] pr-12'
+              className='min-h-[40px] resize-none flex-1'
               disabled={isLoading}
-              rows={1}
             />
-            <div className='absolute bottom-2 right-2 text-xs text-gray-400 dark:text-gray-500'>
-              {isLoading ? '' : 'Enter = 전송, Shift+Enter = 줄바꿈'}
-            </div>
-          </div>
-          <button
-            type='submit'
-            disabled={isLoading || !input.trim()}
-            className='px-4 py-2 h-full bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors dark:bg-blue-600 dark:hover:bg-blue-700 dark:disabled:bg-gray-600'
-          >
-            {isLoading ? (
-              <span className='flex items-center'>
-                <svg
-                  className='animate-spin -ml-1 mr-2 h-4 w-4 text-white'
-                  xmlns='http://www.w3.org/2000/svg'
-                  fill='none'
-                  viewBox='0 0 24 24'
-                >
-                  <circle
-                    className='opacity-25'
-                    cx='12'
-                    cy='12'
-                    r='10'
-                    stroke='currentColor'
-                    strokeWidth='4'
-                  ></circle>
-                  <path
-                    className='opacity-75'
-                    fill='currentColor'
-                    d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'
-                  ></path>
-                </svg>
-                전송 중
-              </span>
-            ) : (
-              '전송'
-            )}
-          </button>
-        </form>
-      </div>
+            <Button type='submit' disabled={isLoading || !input.trim()}>
+              전송
+            </Button>
+          </form>
+        </CardFooter>
+      </Card>
     </div>
   );
 }
