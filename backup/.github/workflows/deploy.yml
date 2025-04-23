@@ -1,0 +1,803 @@
+name: Deploy to OCI
+on:
+  push:
+    branches: [main]
+# 필요한 권한 설정
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # 변경 감지 및 의존성 그래프 분석 작업
+  analyze-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      api_changed: ${{ steps.detect-changes.outputs.api_changed }}
+      web_changed: ${{ steps.detect-changes.outputs.web_changed }}
+      ollama_changed: ${{ steps.detect-changes.outputs.ollama_changed }}
+      owner_lowercase: ${{ steps.set-lowercase.outputs.owner_lowercase }}
+      repo_lowercase: ${{ steps.set-lowercase.outputs.repo_lowercase }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2 # 증분 빌드를 위해 이전 커밋 포함
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 23
+
+      # pnpm 설치
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10.6.3
+          run_install: false
+
+      # pnpm 캐시 설정
+      - name: Get pnpm store directory
+        id: pnpm-store-dir-path
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        id: pnpm-cache
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      # 의존성 설치
+      - name: Install essential dependencies
+        run: pnpm install
+
+      # 변경된 앱 감지 - git diff 사용 + Turborepo 의존성 그래프 활용
+      - name: Detect changed apps
+        id: detect-changes
+        run: |
+          # 기본적으로 모든 앱이 변경된 것으로 설정 (초기 실행 또는 얕은 히스토리 대응)
+          CHANGE_API=true
+          CHANGE_WEB=true
+          CHANGE_OLLAMA=true
+
+          # Git 히스토리가 있는지 확인
+          if git rev-parse HEAD~1 > /dev/null 2>&1; then
+            echo "이전 커밋 히스토리가 존재합니다. 변경된 파일을 분석합니다."
+            # Git diff를 사용하여 변경된 파일 확인
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+            echo "Changed files: $CHANGED_FILES"
+            
+            # 기본적으로 모든 앱이 변경되지 않은 것으로 재설정
+            CHANGE_API=false
+            CHANGE_WEB=false
+            CHANGE_OLLAMA=false
+
+            # 공통 파일 검사 (docker-compose.yml, .dockerignore 등)
+            if echo "$CHANGED_FILES" | grep -q "^docker-compose.yml\|^.dockerignore"; then
+              echo "공통 Docker 설정 파일 변경 감지됨"
+              CHANGE_API=true
+              CHANGE_WEB=true
+              CHANGE_OLLAMA=true
+            fi
+
+            # apps/api 디렉토리의 파일이 변경되었는지 확인
+            if echo "$CHANGED_FILES" | grep -q "^apps/api/"; then
+              CHANGE_API=true
+              echo "API 변경 감지됨"
+            fi
+
+            # apps/web 디렉토리의 파일이 변경되었는지 확인
+            if echo "$CHANGED_FILES" | grep -q "^apps/web/"; then
+              CHANGE_WEB=true
+              echo "Web 변경 감지됨"
+            fi
+
+            # apps/ollama 디렉토리의 파일이 변경되었는지 확인
+            if echo "$CHANGED_FILES" | grep -q "^apps/ollama/"; then
+              CHANGE_OLLAMA=true
+              echo "Ollama 변경 감지됨"
+            fi
+
+            # packages 디렉토리의 파일이 변경되었는지 확인하고 의존성 그래프 분석
+            if echo "$CHANGED_FILES" | grep -q "^packages/"; then
+              echo "패키지 변경 감지됨, 의존성 그래프 분석..."
+              
+              # 변경된 패키지들 식별
+              CHANGED_PACKAGES=$(echo "$CHANGED_FILES" | grep "^packages/" | cut -d "/" -f2 | sort -u)
+              
+              for package in $CHANGED_PACKAGES; do
+                echo "변경된 패키지: $package"
+                
+                # 패키지가 api에 영향을 미치는지 확인
+                if pnpm --silent turbo run build --dry=json --filter="api...[packages/$package]" 2>/dev/null | grep -q "api"; then
+                  echo "패키지 $package는 API에 영향을 줍니다"
+                  CHANGE_API=true
+                fi
+                
+                # 패키지가 web에 영향을 미치는지 확인
+                if pnpm --silent turbo run build --dry=json --filter="web...[packages/$package]" 2>/dev/null | grep -q "web"; then
+                  echo "패키지 $package는 Web에 영향을 줍니다"
+                  CHANGE_WEB=true
+                fi
+              done
+            fi
+
+            # 워크플로우 파일이 변경되었는지 확인
+            if echo "$CHANGED_FILES" | grep -q "^.github/workflows/"; then
+              echo "워크플로우 파일 변경 감지됨, 모든 앱 빌드"
+              CHANGE_API=true
+              CHANGE_WEB=true
+              CHANGE_OLLAMA=true
+            fi
+          else
+            echo "이전 커밋 히스토리가 감지되지 않았습니다. 초기 실행으로 간주하여 모든 앱을 빌드합니다."
+          fi
+
+          # GitHub Actions 출력 설정
+          echo "api_changed=$CHANGE_API" >> $GITHUB_OUTPUT
+          echo "web_changed=$CHANGE_WEB" >> $GITHUB_OUTPUT
+          echo "ollama_changed=$CHANGE_OLLAMA" >> $GITHUB_OUTPUT
+
+          # 디버깅용 출력
+          echo "API_CHANGED: $CHANGE_API"
+          echo "WEB_CHANGED: $CHANGE_WEB"
+          echo "OLLAMA_CHANGED: $CHANGE_OLLAMA"
+
+      - name: Set lowercase owner name
+        id: set-lowercase
+        run: |
+          OWNER_LOWERCASE=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')
+          REPO_LOWERCASE=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]' | cut -d'/' -f2)
+
+          echo "owner_lowercase=$OWNER_LOWERCASE" >> $GITHUB_OUTPUT
+          echo "repo_lowercase=$REPO_LOWERCASE" >> $GITHUB_OUTPUT
+
+          echo "OWNER_LOWERCASE: $OWNER_LOWERCASE"
+          echo "REPO_LOWERCASE: $REPO_LOWERCASE"
+
+  # API 이미지 빌드 작업
+  build-api:
+    needs: analyze-changes
+    if: ${{ needs.analyze-changes.outputs.api_changed == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      api_build_success: ${{ steps.check-build.outputs.build_success }}
+    env:
+      OWNER_LOWERCASE: ${{ needs.analyze-changes.outputs.owner_lowercase }}
+      REPO_LOWERCASE: ${{ needs.analyze-changes.outputs.repo_lowercase }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 23
+
+      # pnpm 설치
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10.6.3
+          run_install: false
+
+      # pnpm 캐시 설정
+      - name: Get pnpm store directory
+        id: pnpm-store-dir-path
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        id: pnpm-cache
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      # Turborepo 캐시 복원
+      - name: Cache turbo build setup
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-api-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-api-
+
+      # 의존성 설치
+      - name: Install dependencies
+        run: pnpm install
+
+      # GitHub Container Registry 로그인
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 로그인 상태 확인
+      - name: Check Docker login status
+        run: |
+          echo "Docker 로그인 상태 확인..."
+          docker info
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      # Docker 레이어 캐싱 - API용
+      - name: Cache Docker layers for API
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache-api
+          key: ${{ runner.os }}-arm64-buildx-api-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-arm64-buildx-api-
+
+      # 캐시 디렉토리 생성 (존재하지 않을 경우)
+      - name: Create cache directories
+        run: mkdir -p /tmp/.buildx-cache-api
+
+      # API 이미지 빌드 및 푸시
+      - name: Build and push API Docker image
+        id: build-api
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./apps/api/Dockerfile
+          push: true
+          tags: ghcr.io/${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-api:latest
+          target: production
+          platforms: linux/arm64 # OCI VM.Standard.A1.Flex는 ARM64 아키텍처 사용
+          cache-from: type=local,src=/tmp/.buildx-cache-api
+          cache-to: type=local,dest=/tmp/.buildx-cache-api-new,mode=max
+          build-args: |
+            NODE_ENV=production
+          outputs: type=image,name=target
+          provenance: false
+        continue-on-error: true
+
+      # API 이미지 빌드 결과 확인
+      - name: Check API image build result
+        id: check-build
+        run: |
+          echo "API 이미지 빌드 결과 확인..."
+          if [ "${{ steps.build-api.outcome }}" == "success" ]; then
+            echo "API 이미지 빌드 성공"
+            # 이미지 이름 패턴 수정 - REGISTRY 환경 변수 사용
+            if docker image ls | grep "${{ env.REGISTRY }}/${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-api"; then
+              echo "API 이미지가 확인되었습니다."
+              echo "build_success=true" >> $GITHUB_OUTPUT
+            else
+              echo "빌드는 성공했지만 이미지를 찾을 수 없습니다."
+              # 빌드가 성공했으므로 true로 설정
+              echo "build_success=true" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "API 이미지 빌드 실패"
+            echo "build_success=false" >> $GITHUB_OUTPUT
+          fi
+
+      # 캐시 업데이트
+      - name: Move cache
+        run: |
+          # API 캐시 이동
+          if [ -d "/tmp/.buildx-cache-api-new" ]; then
+            rm -rf /tmp/.buildx-cache-api
+            mkdir -p /tmp/.buildx-cache-api
+            cp -R /tmp/.buildx-cache-api-new/* /tmp/.buildx-cache-api/ || true
+            echo "API 빌드 캐시 업데이트 완료"
+          fi
+
+  # Web 이미지 빌드 작업
+  build-web:
+    needs: analyze-changes
+    if: ${{ needs.analyze-changes.outputs.web_changed == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      web_build_success: ${{ steps.check-build.outputs.build_success }}
+    env:
+      OWNER_LOWERCASE: ${{ needs.analyze-changes.outputs.owner_lowercase }}
+      REPO_LOWERCASE: ${{ needs.analyze-changes.outputs.repo_lowercase }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 23
+
+      # pnpm 설치
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10.6.3
+          run_install: false
+
+      # pnpm 캐시 설정
+      - name: Get pnpm store directory
+        id: pnpm-store-dir-path
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        id: pnpm-cache
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      # Turborepo 캐시 복원
+      - name: Cache turbo build setup
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-web-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-web-
+
+      # 의존성 설치
+      - name: Install dependencies
+        run: pnpm install
+
+      # GitHub Container Registry 로그인
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      # Docker 레이어 캐싱 - Web용
+      - name: Cache Docker layers for Web
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache-web
+          key: ${{ runner.os }}-arm64-buildx-web-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-arm64-buildx-web-
+
+      # 캐시 디렉토리 생성 (존재하지 않을 경우)
+      - name: Create cache directories
+        run: mkdir -p /tmp/.buildx-cache-web
+
+      # Web 이미지 빌드 및 푸시
+      - name: Build and push Web Docker image
+        id: build-web
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./apps/web/Dockerfile
+          push: true
+          tags: ghcr.io/${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-web:latest
+          target: production
+          platforms: linux/arm64 # OCI VM.Standard.A1.Flex는 ARM64 아키텍처 사용
+          cache-from: type=local,src=/tmp/.buildx-cache-web
+          cache-to: type=local,dest=/tmp/.buildx-cache-web-new,mode=max
+          build-args: |
+            NODE_ENV=production
+            NEXT_PUBLIC_API_URL=/api/v1
+            NEXT_TELEMETRY_DISABLED=1
+          outputs: type=image,name=target
+          provenance: false
+          secrets: |
+            GIT_AUTH_TOKEN=${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      # Web 이미지 빌드 결과 확인
+      - name: Check Web image build result
+        id: check-build
+        run: |
+          echo "Web 이미지 빌드 결과 확인..."
+          if [ "${{ steps.build-web.outcome }}" == "success" ]; then
+            echo "Web 이미지 빌드 성공"
+            # 이미지 이름 패턴 수정 - REGISTRY 환경 변수 사용
+            if docker image ls | grep "${{ env.REGISTRY }}/${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-web"; then
+              echo "Web 이미지가 확인되었습니다."
+              echo "build_success=true" >> $GITHUB_OUTPUT
+            else
+              echo "빌드는 성공했지만 이미지를 찾을 수 없습니다."
+              # 빌드가 성공했으므로 true로 설정
+              echo "build_success=true" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "Web 이미지 빌드 실패"
+            echo "build_success=false" >> $GITHUB_OUTPUT
+          fi
+          docker image ls | grep "${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-web" || echo "Web 이미지가 빌드되지 않았습니다."
+
+      # 캐시 업데이트
+      - name: Move cache
+        run: |
+          # Web 캐시 이동
+          if [ -d "/tmp/.buildx-cache-web-new" ]; then
+            rm -rf /tmp/.buildx-cache-web
+            mkdir -p /tmp/.buildx-cache-web
+            cp -R /tmp/.buildx-cache-web-new/* /tmp/.buildx-cache-web/ || true
+            echo "Web 빌드 캐시 업데이트 완료"
+          fi
+
+  # Ollama 이미지 빌드 작업
+  build-ollama:
+    needs: analyze-changes
+    if: ${{ needs.analyze-changes.outputs.ollama_changed == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      ollama_build_success: ${{ steps.check-build.outputs.build_success }}
+    env:
+      OWNER_LOWERCASE: ${{ needs.analyze-changes.outputs.owner_lowercase }}
+      REPO_LOWERCASE: ${{ needs.analyze-changes.outputs.repo_lowercase }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # GitHub Container Registry 로그인
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      # Docker 레이어 캐싱 - Ollama용
+      - name: Cache Docker layers for Ollama
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache-ollama
+          key: ${{ runner.os }}-arm64-buildx-ollama-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-arm64-buildx-ollama-
+
+      # 캐시 디렉토리 생성 (존재하지 않을 경우)
+      - name: Create cache directories
+        run: mkdir -p /tmp/.buildx-cache-ollama
+
+      # Ollama 이미지 빌드 및 푸시
+      - name: Build and push Ollama Docker image
+        id: build-ollama
+        uses: docker/build-push-action@v4
+        with:
+          context: ./apps/ollama
+          push: true
+          tags: ghcr.io/${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-ollama:latest
+          platforms: linux/arm64 # OCI VM.Standard.A1.Flex는 ARM64 아키텍처 사용
+          cache-from: type=local,src=/tmp/.buildx-cache-ollama
+          cache-to: type=local,dest=/tmp/.buildx-cache-ollama-new,mode=max
+          outputs: type=image,name=target
+          provenance: false
+          no-cache: false
+        continue-on-error: true
+
+      # Ollama 이미지 빌드 결과 확인
+      - name: Check Ollama image build result
+        id: check-build
+        run: |
+          echo "Ollama 이미지 빌드 결과 확인..."
+          if [ "${{ steps.build-ollama.outcome }}" == "success" ]; then
+            echo "Ollama 이미지 빌드 성공"
+            # 이미지 이름 패턴 수정 - REGISTRY 환경 변수 사용
+            if docker image ls | grep "${{ env.REGISTRY }}/${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-ollama"; then
+              echo "Ollama 이미지가 확인되었습니다."
+              echo "build_success=true" >> $GITHUB_OUTPUT
+            else
+              echo "빌드는 성공했지만 이미지를 찾을 수 없습니다."
+              # 빌드가 성공했으므로 true로 설정
+              echo "build_success=true" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "Ollama 이미지 빌드 실패"
+            echo "build_success=false" >> $GITHUB_OUTPUT
+          fi
+          docker image ls | grep "${{ env.OWNER_LOWERCASE }}/${{ env.REPO_LOWERCASE }}-ollama" || echo "Ollama 이미지가 빌드되지 않았습니다."
+
+      # 캐시 업데이트
+      - name: Move cache
+        run: |
+          # Ollama 캐시 이동
+          if [ -d "/tmp/.buildx-cache-ollama-new" ]; then
+            rm -rf /tmp/.buildx-cache-ollama
+            mkdir -p /tmp/.buildx-cache-ollama
+            cp -R /tmp/.buildx-cache-ollama-new/* /tmp/.buildx-cache-ollama/ || true
+            echo "Ollama 빌드 캐시 업데이트 완료"
+          fi
+
+  # 이미지 패키지를 공개로 설정 및 배포
+  deploy:
+    needs: [analyze-changes, build-api, build-web, build-ollama]
+    if: ${{ always() && needs.analyze-changes.result == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      OWNER_LOWERCASE: ${{ needs.analyze-changes.outputs.owner_lowercase }}
+      REPO_LOWERCASE: ${{ needs.analyze-changes.outputs.repo_lowercase }}
+      API_CHANGED: ${{ needs.analyze-changes.outputs.api_changed }}
+      WEB_CHANGED: ${{ needs.analyze-changes.outputs.web_changed }}
+      OLLAMA_CHANGED: ${{ needs.analyze-changes.outputs.ollama_changed }}
+      API_BUILD_SUCCESS: ${{ needs.build-api.outputs.api_build_success || 'false' }}
+      WEB_BUILD_SUCCESS: ${{ needs.build-web.outputs.web_build_success || 'false' }}
+      OLLAMA_BUILD_SUCCESS: ${{ needs.build-ollama.outputs.ollama_build_success || 'false' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 이미지 패키지를 공개로 설정
+      - name: Make packages public
+        run: |
+          echo "GitHub 패키지를 공개로 설정합니다..."
+
+          # 패키지 가시성 설정 함수
+          set_package_visibility() {
+            local package_name=$1
+            echo "패키지 $package_name 가시성 설정 시도..."
+            
+            # 패키지 존재 여부 확인
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/orgs/${{ env.OWNER_LOWERCASE }}/packages/container/$package_name")
+            
+            if [ "$STATUS" = "200" ]; then
+              # 조직 패키지인 경우
+              curl -X PATCH \
+                -H "Accept: application/vnd.github.v3+json" \
+                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                "https://api.github.com/orgs/${{ env.OWNER_LOWERCASE }}/packages/container/$package_name/visibility" \
+                -d '{"visibility":"public"}'
+              echo "조직 패키지 $package_name 가시성 설정 완료"
+            else
+              # 사용자 패키지인 경우
+              curl -X PATCH \
+                -H "Accept: application/vnd.github.v3+json" \
+                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                "https://api.github.com/user/packages/container/$package_name/visibility" \
+                -d '{"visibility":"public"}'
+              echo "사용자 패키지 $package_name 가시성 설정 완료"
+            fi
+          }
+
+          # API 패키지 가시성 설정
+          set_package_visibility "${{ env.REPO_LOWERCASE }}-api"
+
+          # Web 패키지 가시성 설정
+          set_package_visibility "${{ env.REPO_LOWERCASE }}-web"
+
+          # Ollama 패키지 가시성 설정
+          set_package_visibility "${{ env.REPO_LOWERCASE }}-ollama"
+
+      # SSH를 통한 클라우드 인스턴스 배포
+      - name: Deploy to cloud instance
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: OWNER_LOWERCASE,REPO_LOWERCASE,API_CHANGED,WEB_CHANGED,OLLAMA_CHANGED,API_BUILD_SUCCESS,WEB_BUILD_SUCCESS,OLLAMA_BUILD_SUCCESS
+          script: |
+            # 디버깅 정보 출력
+            echo "디버깅 정보:"
+            echo "OWNER_LOWERCASE: $OWNER_LOWERCASE"
+            echo "REPO_LOWERCASE: $REPO_LOWERCASE"
+            echo "API_CHANGED: ${API_CHANGED}"
+            echo "WEB_CHANGED: ${WEB_CHANGED}"
+            echo "OLLAMA_CHANGED: ${OLLAMA_CHANGED}"
+            echo "API_BUILD_SUCCESS: ${API_BUILD_SUCCESS}"
+            echo "WEB_BUILD_SUCCESS: ${WEB_BUILD_SUCCESS}"
+            echo "OLLAMA_BUILD_SUCCESS: ${OLLAMA_BUILD_SUCCESS}"
+
+            # GitHub Container Registry 로그인 (PAT 토큰 사용)
+            if [ ! -z "${{ secrets.GH_PAT }}" ]; then
+              echo "GitHub Container Registry에 로그인 시도..."
+              echo "${{ secrets.GH_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            else
+              echo "경고: GH_PAT 시크릿이 설정되지 않았습니다."
+            fi
+
+            # 사용 가능한 이미지 확인
+            echo "사용 가능한 이미지 목록 확인:"
+            docker image ls | grep "$OWNER_LOWERCASE/$REPO_LOWERCASE" || echo "로컬에 이미지가 없습니다."
+
+            # 이미지 존재 여부 확인 및 가져오기 함수
+            check_and_pull_image() {
+              local service=$1
+              local image_name="ghcr.io/$OWNER_LOWERCASE/$REPO_LOWERCASE-$service:latest"
+              local changed=$2
+              local build_success=$3
+              
+              echo "서비스: $service, 변경됨: $changed, 빌드 성공: $build_success"
+              
+              # 빌드가 성공했거나 이미지가 이미 존재하는 경우에만 진행
+              if [ "$build_success" = "true" ] || [ "$changed" = "false" ]; then
+                # 이미지 존재 여부 확인
+                if curl -s -f -H "Authorization: token ${{ secrets.GH_PAT }}" \
+                  "https://api.github.com/user/packages/container/$REPO_LOWERCASE-$service" > /dev/null; then
+                  echo "$service 이미지가 레지스트리에 존재합니다."
+                  
+                  if [ "$changed" = "true" ] || ! docker image inspect "$image_name" > /dev/null 2>&1; then
+                    echo "$service 이미지 가져오기 시도..."
+                    docker pull "$image_name" && echo "$service 이미지 가져오기 성공" || echo "$service 이미지 가져오기 실패"
+                  else
+                    echo "$service 이미지가 이미 로컬에 존재하고 변경되지 않았습니다."
+                  fi
+                  return 0
+                else
+                  echo "$service 이미지가 레지스트리에 존재하지 않습니다."
+                  return 1
+                fi
+              else
+                echo "$service 이미지 빌드가 실패했거나 변경되지 않았습니다."
+                return 1
+              fi
+            }
+
+            # 각 서비스 이미지 확인 및 가져오기
+            API_EXISTS=true
+            WEB_EXISTS=true
+            OLLAMA_EXISTS=true
+
+            check_and_pull_image "api" "${API_CHANGED}" "${API_BUILD_SUCCESS}" || API_EXISTS=false
+            check_and_pull_image "web" "${WEB_CHANGED}" "${WEB_BUILD_SUCCESS}" || WEB_EXISTS=false
+            check_and_pull_image "ollama" "${OLLAMA_CHANGED}" "${OLLAMA_BUILD_SUCCESS}" || OLLAMA_EXISTS=false
+
+            # 앱 디렉터리 생성 (cloud-init에 의해 이미 생성됨)
+            echo "앱 디렉터리 확인..."
+            cd /home/ubuntu/app
+
+            # docker-compose.yml 생성 (존재하는 서비스만 포함)
+            cat > docker-compose.yml << 'EOF'
+            services:
+            EOF
+
+            # API 서비스 추가 (존재하는 경우)
+            if [ "$API_EXISTS" = "true" ]; then
+              cat >> docker-compose.yml << 'EOF'
+              api:
+                image: ghcr.io/${OWNER_LOWERCASE}/${REPO_LOWERCASE}-api:latest
+                ports:
+                  - '8080:8080'
+                restart: unless-stopped
+                environment:
+                  - PORT=8080
+                  - BOT_ACCESS_TOKEN=${BOT_ACCESS_TOKEN}
+                  - DOMAIN_NAME=${DOMAIN_NAME}
+                  - BOT_NAME=${BOT_NAME}
+                  - BOT_USERNAME=${BOT_USERNAME}
+                  - BOT_ID=${BOT_ID}
+                  - DB_USERNAME=ADMIN
+                  - DB_PASSWORD=${DB_PASSWORD}
+                  - NODE_ENV=production
+                  - API_PREFIX=/api/v1
+                  - OLLAMA_API_URL=http://ollama:11434
+                networks:
+                  - app-network
+                healthcheck:
+                  test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health", "||", "exit", "1"]
+                  interval: 30s
+                  timeout: 10s
+                  retries: 3
+                  start_period: 5s
+            EOF
+            else
+              echo "API 서비스가 존재하지 않아 docker-compose.yml에서 제외됩니다."
+            fi
+
+            # Web 서비스 추가 (존재하는 경우)
+            if [ "$WEB_EXISTS" = "true" ]; then
+              cat >> docker-compose.yml << 'EOF'
+
+              web:
+                image: ghcr.io/${OWNER_LOWERCASE}/${REPO_LOWERCASE}-web:latest
+                ports:
+                  - '3000:3000'
+                restart: unless-stopped
+                environment:
+                  - NODE_ENV=production
+                  - NEXT_PUBLIC_API_URL=/api/v1
+                  - API_SERVER_URL=http://api:8080
+                  - OLLAMA_API_URL=http://ollama:11434
+                networks:
+                  - app-network
+                healthcheck:
+                  test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000", "||", "exit", "1"]
+                  interval: 30s
+                  timeout: 10s
+                  retries: 3
+                  start_period: 5s
+            EOF
+              
+              # API 서비스가 존재하는 경우에만 의존성 추가
+              if [ "$API_EXISTS" = "true" ]; then
+                cat >> docker-compose.yml << 'EOF'
+                depends_on:
+                  - api
+            EOF
+              fi
+            else
+              echo "Web 서비스가 존재하지 않아 docker-compose.yml에서 제외됩니다."
+            fi
+
+            # Ollama 서비스 추가 (존재하는 경우)
+            if [ "$OLLAMA_EXISTS" = "true" ]; then
+              cat >> docker-compose.yml << 'EOF'
+                  
+              ollama:
+                image: ghcr.io/${OWNER_LOWERCASE}/${REPO_LOWERCASE}-ollama:latest
+                restart: unless-stopped
+                networks:
+                  - app-network
+                volumes:
+                  - ollama-models:/root/.ollama
+                entrypoint: ["/bin/sh", "-c", "/usr/local/bin/ollama-entrypoint.sh"]
+                healthcheck:
+                  test: ["CMD", "curl", "-f", "http://localhost:11434/api/version", "||", "exit", "1"]
+                  interval: 60s
+                  timeout: 30s
+                  retries: 5
+                  start_period: 60s
+            EOF
+                        else
+                          echo "Ollama 서비스가 존재하지 않아 docker-compose.yml에서 제외됩니다."
+                        fi
+
+            # 볼륨 및 네트워크 설정 추가
+            cat >> docker-compose.yml << 'EOF'
+
+            volumes:
+              ollama-models:
+                # 모델 데이터 영구 보존
+
+            networks:
+              app-network:
+                driver: bridge
+            EOF
+
+            # 환경 변수 파일 생성
+            cat > .env << EOF
+            OWNER_LOWERCASE=$OWNER_LOWERCASE
+            REPO_LOWERCASE=$REPO_LOWERCASE
+            BOT_ACCESS_TOKEN=${{ secrets.BOT_ACCESS_TOKEN }}
+            DOMAIN_NAME=${{ secrets.DOMAIN_NAME }}
+            BOT_NAME=${{ secrets.BOT_NAME }}
+            BOT_USERNAME=${{ secrets.BOT_USERNAME }}
+            BOT_ID=${{ secrets.BOT_ID }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            EOF
+
+            # docker-compose.yml 내용 확인
+            echo "생성된 docker-compose.yml 내용:"
+            cat docker-compose.yml
+
+            # 서비스가 하나라도 존재하는지 확인
+            if [ "$API_EXISTS" = "true" ] || [ "$WEB_EXISTS" = "true" ] || [ "$OLLAMA_EXISTS" = "true" ]; then
+              echo "서비스를 재시작합니다. 존재하는 서비스: $API_EXISTS, $WEB_EXISTS, $OLLAMA_EXISTS"
+              
+              # 변경된 서비스만 재시작 또는 모든 서비스 재시작
+              docker-compose down || true
+              docker-compose up -d
+            else
+              echo "실행 가능한 서비스가 없습니다. 배포를 건너뜁니다."
+            fi
+
+            # 컨테이너 상태 확인
+            echo "컨테이너 상태:"
+            docker-compose ps
+
+            # 이미지 정리 (12시간 이내 사용되지 않은 이미지)
+            docker image prune -a -f --filter "until=12h"

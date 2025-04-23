@@ -12,8 +12,6 @@
     "lint": "turbo lint",
     "test": "turbo test",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "build:ollama": "docker build -t ollama-server ./apps/ollama",
-    "start:ollama": "docker run --rm -p 11434:11434 ollama-server",
     "prepare": "husky"
   },
   "devDependencies": {
@@ -23,15 +21,12 @@
     "turbo": "^2.0.0"
   },
   "engines": {
-    "node": ">=23.0.0"
+    "node": ">=20.0.0"
   },
   "packageManager": "pnpm@10.6.3",
   "lint-staged": {
-    "apps/api/**/*.ts": [
-      "pnpm --filter api tsc --noEmit"
-    ],
-    "apps/web/**/*.{ts,tsx}": [
-      "pnpm --filter web tsc --noEmit"
+    "apps/cms/**/*.{ts,tsx}": [
+      "pnpm --filter cms tsc --noEmit"
     ]
   }
 }

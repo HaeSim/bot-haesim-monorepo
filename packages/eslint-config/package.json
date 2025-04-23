@@ -1,17 +1,9 @@
 {
-  "name": "eslint-config-custom",
+  "name": "eslint-config",
   "version": "0.0.0",
   "private": true,
   "files": [
-    "next.js",
-    "nestjs.js"
-  ],
-  "devDependencies": {
-    "@eslint/eslintrc": "^3.2.0",
-    "@eslint/js": "^9.18.0",
-    "eslint-config-next": "15.2.2",
-    "eslint-config-prettier": "^10.0.1",
-    "eslint-plugin-prettier": "^5.2.2",
-    "globals": "^16.0.0"
-  }
+    "nextjs.js",
+    "payload.js"
+  ]
 }

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "PayloadCMS",
+  "extends": "./base.json",
+  "compilerOptions": {
+    "target": "es2019",
+    "lib": ["es2019", "esnext.asynciterable"],
+    "module": "CommonJS",
+    "outDir": "dist",
+    "allowJs": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "paths": {
+      "@payload-config": ["./src/payload.config.ts"]
+    }
+  },
+  "include": ["src/**/*", "seed/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
