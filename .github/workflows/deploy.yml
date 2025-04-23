@@ -31,7 +31,7 @@ jobs:
       - name: 의존성 설치
         run: |
           cd apps/cms
-          pnpm install
+          pnpm install --no-frozen-lockfile
 
       - name: 애플리케이션 빌드
         run: |
